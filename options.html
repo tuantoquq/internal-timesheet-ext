@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timesheet AutoFill — Hướng dẫn</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --font:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+        --bg: #0e0f13;
+        --surface: #161820;
+        --card: #1d1f28;
+        --border: #2a2d3a;
+        --border2: #343748;
+        --accent: #22b8f0;
+        --accent-bg: rgba(34, 184, 240, 0.12);
+        --text-1: #e8eaf0;
+        --text-2: #9196a8;
+        --text-3: #5e6275;
+        --r: 12px;
+        --rs: 8px;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text-1);
+        font-family: var(--font);
+        line-height: 1.7;
+        min-height: 100vh;
+      }
+
+      /* NAV */
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 99;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 24px;
+      }
+      .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .nav-brand img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+      }
+      .nav-brand span {
+        color: var(--accent);
+      }
+      .nav-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 18px;
+        border: none;
+        border-radius: var(--rs);
+        font-family: var(--font);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        transition: opacity 0.15s;
+      }
+      .btn:hover {
+        opacity: 0.82;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--text-2);
+        border: 1px solid var(--border);
+      }
+      .btn-ghost:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      /* HERO */
+      .hero {
+        padding: 64px 24px 40px;
+        text-align: center;
+      }
+      .hero img {
+        width: 72px;
+        height: 72px;
+        border-radius: 16px;
+        margin: 0 auto 18px;
+        display: block;
+      }
+      .hero h1 {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.4px;
+        margin-bottom: 8px;
+      }
+      .hero h1 span {
+        color: var(--accent);
+      }
+      .hero p {
+        font-size: 14px;
+        color: var(--text-2);
+        max-width: 480px;
+        margin: 0 auto;
+      }
+
+      /* STRIPE */
+      .stripe {
+        height: 3px;
+        background: linear-gradient(
+          90deg,
+          #22b8f0,
+          #10d2b0,
+          #75e51b,
+          #f018b8,
+          #ff1f5b,
+          #ff861a,
+          #ffe12b
+        );
+        margin: 0 auto;
+        max-width: 640px;
+        border-radius: 2px;
+      }
+
+      /* FEATURES */
+      .section {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 44px 24px;
+      }
+      .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .section-sub {
+        font-size: 13px;
+        color: var(--text-2);
+        margin-bottom: 24px;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
+      }
+      .feat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        padding: 18px 14px;
+        text-align: center;
+        transition: border-color 0.2s;
+      }
+      .feat:hover {
+        border-color: var(--accent);
+      }
+      .feat-icon {
+        font-size: 22px;
+        margin-bottom: 8px;
+      }
+      .feat-name {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .feat-desc {
+        font-size: 11px;
+        color: var(--text-2);
+        line-height: 1.5;
+      }
+
+      /* ACCORDION */
+      .acc {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 0 24px 44px;
+      }
+      .acc-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .acc-sub {
+        font-size: 13px;
+        color: var(--text-2);
+        margin-bottom: 24px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 18px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s;
+      }
+      .card-head:hover {
+        background: rgba(255, 255, 255, 0.025);
+      }
+      .card-ico {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        background: var(--accent-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        flex-shrink: 0;
+      }
+      .card-text {
+        flex: 1;
+      }
+      .card-text h3 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+      .card-text p {
+        font-size: 11px;
+        color: var(--text-3);
+      }
+      .card-arrow {
+        font-size: 11px;
+        color: var(--text-3);
+        transition: transform 0.2s;
+        line-height: 1;
+      }
+      .card.is-open .card-arrow {
+        transform: rotate(180deg);
+      }
+
+      .card-body {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+      .card.is-open .card-body {
+        max-height: 600px;
+      }
+      .card-body-inner {
+        padding: 0 18px 18px;
+        border-top: 1px solid var(--border);
+        padding-top: 16px;
+      }
+
+      /* STEPS inside card */
+      .steps {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 4px;
+      }
+      .step {
+        display: flex;
+        gap: 11px;
+        align-items: flex-start;
+      }
+      .step-n {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--accent-bg);
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 2px;
+      }
+      .step p {
+        font-size: 12px;
+        color: var(--text-2);
+        margin: 0;
+        line-height: 1.6;
+      }
+      .step strong {
+        color: var(--text-1);
+      }
+
+      /* TIP */
+      .tip {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--rs);
+        padding: 10px 14px;
+        margin-top: 12px;
+        font-size: 11px;
+        color: var(--text-2);
+        line-height: 1.6;
+      }
+      .tip b {
+        color: var(--accent);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      /* TABLE */
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .tbl th,
+      .tbl td {
+        text-align: left;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .tbl th {
+        color: var(--text-3);
+        font-weight: 500;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+      .tbl code {
+        background: var(--card);
+        padding: 2px 7px;
+        border-radius: 4px;
+        color: var(--accent);
+        font-size: 11px;
+      }
+
+      /* FOOTER */
+      .footer {
+        text-align: center;
+        padding: 28px 24px;
+        color: var(--text-3);
+        font-size: 11px;
+      }
+
+      @media (max-width: 600px) {
+        .hero {
+          padding: 40px 16px 28px;
+        }
+        .hero h1 {
+          font-size: 20px;
+        }
+        .section,
+        .acc {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .features {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- NAV -->
+    <nav class="nav">
+      <div class="nav-brand">
+        <img src="icons/icon48.png" alt="Logo" />
+        <span>Timesheet <span>AutoFill</span></span>
+      </div>
+      <div class="nav-actions">
+        <button class="btn btn-ghost" id="btnOpenExt">↗ Mở Extension</button>
+        <a
+          class="btn btn-primary"
+          href="http://10.145.48.117:9099"
+          target="_blank"
+          >Mở Timesheet</a
+        >
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <div class="hero">
+      <img src="icons/icon256.png" alt="Timesheet AutoFill" />
+      <h1>Hướng dẫn <span>sử dụng</span></h1>
+      <p>Tất cả những gì bạn cần biết để dùng Timesheet AutoFill hiệu quả.</p>
+    </div>
+
+    <div class="stripe"></div>
+
+    <!-- FEATURES -->
+    <div class="section">
+      <div class="section-title">Tổng quan tính năng</div>
+      <div class="section-sub">Những gì extension có thể làm cho bạn.</div>
+      <div class="features">
+        <div class="feat">
+          <div class="feat-icon">⚡</div>
+          <div class="feat-name">Auto-fill 1 click</div>
+          <div class="feat-desc">
+            Điền toàn bộ tuần — project, task, giờ bắt đầu, nghỉ trưa, giờ kết
+            thúc.
+          </div>
+        </div>
+        <div class="feat">
+          <div class="feat-icon">📋</div>
+          <div class="feat-name">Preset &amp; Template</div>
+          <div class="feat-desc">
+            Lưu cấu hình tuần thành preset, tái sử dụng bất cứ lúc nào.
+          </div>
+        </div>
+        <div class="feat">
+          <div class="feat-icon">🔍</div>
+          <div class="feat-name">Search Project</div>
+          <div class="feat-desc">
+            Tìm project nhanh từ trang timesheet, lưu vào preset để dùng lại.
+          </div>
+        </div>
+        <div class="feat">
+          <div class="feat-icon">🎨</div>
+          <div class="feat-name">Theme &amp; Mode</div>
+          <div class="feat-desc">
+            7 màu chủ đạo + dark/light mode theo logo OpenWay.
+          </div>
+        </div>
+        <div class="feat">
+          <div class="feat-icon">🕐</div>
+          <div class="feat-name">Auto Time</div>
+          <div class="feat-desc">
+            Tự động chia Start/Break/Finish theo số giờ từng task.
+          </div>
+        </div>
+        <div class="feat">
+          <div class="feat-icon">💾</div>
+          <div class="feat-name">Export / Import</div>
+          <div class="feat-desc">
+            Xuất cấu hình JSON, nhập lại khi cần — dùng được trên nhiều máy.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stripe"></div>
+
+    <!-- ACCORDION GUIDES -->
+    <div class="acc">
+      <div class="acc-title">Hướng dẫn chi tiết</div>
+      <div class="acc-sub">Bấm vào từng mục để xem hướng dẫn.</div>
+
+      <!-- 1 -->
+      <div class="card" id="g-connect">
+        <div class="card-head">
+          <div class="card-ico">🔗</div>
+          <div class="card-text">
+            <h3>Kết nối với trang Timesheet</h3>
+            <p>Đảm bảo extension nhận diện được trang timesheet</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  Mở trang timesheet nội bộ tại
+                  <strong>http://10.145.48.117:9099</strong> trong Chrome.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  Click icon <strong>Timesheet AutoFill</strong> trên toolbar
+                  Chrome.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  Header popup hiển thị trạng thái:
+                  <strong>chấm xanh = đã kết nối</strong>, xám = chưa kết nối.
+                </p>
+              </div>
+            </div>
+            <div class="tip">
+              <b>Tip</b>Nếu URL timesheet khác mặc định, vào tab
+              <strong>Cài đặt → URL Timesheet</strong>, sửa và lưu lại, rồi
+              reload trang.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="card" id="g-project">
+        <div class="card-head">
+          <div class="card-ico">🔍</div>
+          <div class="card-text">
+            <h3>Tìm và lưu Project</h3>
+            <p>Search project từ trang timesheet, thêm vào preset</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  Đảm bảo trang timesheet đang mở và extension đã kết nối (chấm
+                  xanh).
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  Chuyển sang tab <strong>Presets</strong> → tìm section
+                  <strong>Tìm Project</strong>.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  Nhập keyword vào ô tìm kiếm → nhấn <strong>Tìm</strong>. Danh
+                  sách project từ trang timesheet sẽ hiện ra.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">4</div>
+                <p>
+                  Click vào tên project trong kết quả để
+                  <strong>thêm vào danh sách đã lưu</strong>.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">5</div>
+                <p>
+                  Project đã lưu sẽ xuất hiện trong dropdown của từng task ở tab
+                  Điền task.
+                </p>
+              </div>
+            </div>
+            <div class="tip">
+              <b>Tip</b>Extension đọc dữ liệu project trực tiếp từ trang
+              timesheet. Cần mở trang timesheet trước khi tìm.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="card" id="g-fill">
+        <div class="card-head">
+          <div class="card-ico">✏️</div>
+          <div class="card-text">
+            <h3>Điền task cho từng ngày</h3>
+            <p>Chọn project, nhập nội dung, set giờ làm việc</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  <strong>Bật ngày:</strong> Toggle cạnh tên ngày (T2–CN) để
+                  bật/tắt. Mặc định T2–T6 đã bật.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  <strong>Chọn project:</strong> Click dropdown project trong
+                  task → chọn từ danh sách đã lưu ở Presets.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  <strong>Apply All:</strong> Nhấn nút <strong>⟳</strong> cạnh
+                  project hoặc nội dung task để copy sang tất cả ngày đang bật.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">4</div>
+                <p>
+                  <strong>Nhập nội dung task:</strong> Gõ mô tả công việc vào ô
+                  text bên dưới project.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">5</div>
+                <p>
+                  Nhấn <strong>"Điền timesheet"</strong> ở footer → extension tự
+                  động điền lên trang timesheet.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="card" id="g-autotime">
+        <div class="card-head">
+          <div class="card-ico">🕐</div>
+          <div class="card-text">
+            <h3>Auto Time — Tự chia giờ (Comming Soon)</h3>
+            <p>Tự động tính Start / Break / Finish cho từng task</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  Giờ mặc định:
+                  <strong>Start 09:00 · Break 01:30 · Finish 18:30</strong>.
+                  Thay đổi trong tab Cài đặt.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  Khi một ngày có nhiều task, nhập
+                  <strong>số giờ làm việc</strong> cho từng task vào ô input.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  Nhấn nút <strong>⏱ Auto time</strong> trên card ngày → Start,
+                  Break, Finish được tính và điền tự động.
+                </p>
+              </div>
+            </div>
+            <div class="tip">
+              <b>Lưu ý</b>Bước nhảy thời gian là 15 phút. Finish tối đa 23:30.
+              Nếu task tràn sang ngày mới, extension sẽ đẩy sang ngày tiếp theo.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 -->
+      <div class="card" id="g-preset">
+        <div class="card-head">
+          <div class="card-ico">📋</div>
+          <div class="card-text">
+            <h3>Lưu và áp dụng Preset</h3>
+            <p>Tái sử dụng cấu hình tuần đã lưu sẵn</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  <strong>Lưu preset:</strong> Sau khi điền task xong, vào tab
+                  <strong>Presets</strong> → nhấn
+                  <strong>＋ Lưu cấu hình hiện tại</strong>.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  Đặt tên cho preset (VD: "Tuần bình thường", "Sprint ABC") →
+                  nhấn Lưu.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  <strong>Áp dụng:</strong> Click
+                  <strong>▶ Áp dụng</strong> trên preset → toàn bộ task và giờ
+                  được load lại.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">4</div>
+                <p><strong>Xoá:</strong> Nhấn 🗑 trên preset muốn xoá.</p>
+              </div>
+            </div>
+            <div class="tip">
+              <b>Tip</b>Preset lưu đầy đủ: project, task, giờ, ngày bật/tắt. Tạo
+              nhiều preset cho các loại tuần khác nhau.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="card" id="g-theme">
+        <div class="card-head">
+          <div class="card-ico">🎨</div>
+          <div class="card-text">
+            <h3>Đổi màu Theme &amp; chế độ Sáng/Tối</h3>
+            <p>7 màu OpenWay + dark / light mode</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  Mở tab <strong>Cài đặt</strong> → tìm section
+                  <strong>Giao diện</strong>.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  <strong>Chế độ:</strong> Nhấn <strong>🌙 Tối</strong> hoặc
+                  <strong>☀️ Sáng</strong> để chuyển dark/light mode.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  <strong>Màu chủ đạo:</strong> Click một trong 7 swatch màu
+                  (Cyan, Teal, Lime, Magenta, Red, Orange, Yellow) — áp dụng
+                  ngay lập tức.
+                </p>
+              </div>
+            </div>
+            <div class="tip">
+              <b>Tip</b>Theme lưu tự động trong storage và được giữ nguyên khi
+              mở lại extension. Cũng được bao gồm khi export/import config.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7 -->
+      <div class="card" id="g-export">
+        <div class="card-head">
+          <div class="card-ico">💾</div>
+          <div class="card-text">
+            <h3>Export &amp; Import cấu hình</h3>
+            <p>Sao lưu và khôi phục toàn bộ dữ liệu</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  <strong>Export:</strong> Tab Cài đặt → nhấn
+                  <strong>↑ Xuất config</strong>. File JSON tải về chứa state,
+                  presets, theme.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  <strong>Import:</strong> Nhấn <strong>↓ Nhập config</strong> →
+                  chọn file JSON → dữ liệu khôi phục hoàn toàn.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">3</div>
+                <p>
+                  <strong>Reset:</strong> Nhấn
+                  <strong>🗑 Xoá toàn bộ dữ liệu</strong> để trở về mặc định.
+                </p>
+              </div>
+            </div>
+            <div class="tip">
+              <b>Tip</b>Dùng Export/Import để chuyển cài đặt giữa các máy mà
+              không cần thiết lập lại từ đầu.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8 -->
+      <div class="card" id="g-tabview">
+        <div class="card-head">
+          <div class="card-ico">↗</div>
+          <div class="card-text">
+            <h3>Mở Extension trong Tab mới</h3>
+            <p>Giao diện rộng hơn, dễ thao tác hơn</p>
+          </div>
+          <div class="card-arrow">▼</div>
+        </div>
+        <div class="card-body">
+          <div class="card-body-inner">
+            <div class="steps">
+              <div class="step">
+                <div class="step-n">1</div>
+                <p>
+                  Nhấn nút <strong>↗</strong> ở góc phải header popup để mở
+                  extension trong tab mới với giao diện rộng hơn.
+                </p>
+              </div>
+              <div class="step">
+                <div class="step-n">2</div>
+                <p>
+                  Tab view hỗ trợ tất cả chức năng: project search, điền task,
+                  preset, theme. Popup sẽ tự đóng.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stripe"></div>
+
+    <div class="footer">
+      Timesheet AutoFill v1.0 &middot; Built with &hearts; for OpenWay by
+      @tuannha
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

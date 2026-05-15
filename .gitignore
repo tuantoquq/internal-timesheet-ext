@@ -1,0 +1,25 @@
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+.agents/
+.codex/
+data/
+*.zip
+*.log
+
+# Node (even if not used much, good practice)
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class

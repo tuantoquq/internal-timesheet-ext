@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timesheet AutoFill</title>
+    <style>
+      @font-face {
+        font-family: var(--font-sans);
+        src: local('Segoe UI'), local('system-ui');
+      }
+      /* ── Reset & Base ── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
+          Arial, sans-serif;
+        --font-mono:
+          'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+        --bg: #0e0f13;
+        --surface: #161820;
+        --card: #1d1f28;
+        --border: #2a2d3a;
+        --border2: #343748;
+        --accent: #22B8F0;
+        --accent2: #22B8F0;
+        --accent-bg: rgba(34, 184, 240, 0.12);
+        --accent-border: rgba(34, 184, 240, 0.25);
+        --green: #34d399;
+        --green-bg: rgba(52, 211, 153, 0.1);
+        --amber: #fbbf24;
+        --amber-bg: rgba(251, 191, 36, 0.1);
+        --red: #f87171;
+        --red-bg: rgba(248, 113, 113, 0.1);
+        --text-1: #e8eaf0;
+        --text-2: #9196a8;
+        --text-3: #5e6275;
+        --radius: 10px;
+        --radius-sm: 6px;
+        --btn-text: #ffffff;
+        --hover-overlay: rgba(255, 255, 255, 0.025);
+        --spinner-border: rgba(255, 255, 255, 0.3);
+        --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      }
+
+      body.light-theme {
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --card: #ffffff;
+        --border: #d8dae2;
+        --border2: #c4c7d0;
+        --text-1: #1a1c24;
+        --text-2: #555a6e;
+        --text-3: #8a8fa2;
+        --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        --btn-text: #ffffff;
+        --hover-overlay: rgba(0, 0, 0, 0.035);
+        --spinner-border: rgba(0, 0, 0, 0.15);
+        --green-bg: rgba(52, 211, 153, 0.12);
+        --amber-bg: rgba(251, 191, 36, 0.12);
+        --red-bg: rgba(248, 113, 113, 0.12);
+      }
+
+      html {
+        font-size: 13px;
+        height: 600px;
+      }
+
+      body {
+        width: 420px;
+        height: 600px;
+        background: var(--bg);
+        color: var(--text-1);
+        font-family: var(--font-sans);
+        font-weight: 400;
+        line-height: 1.5;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── Header ── */
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        flex-shrink: 0;
+      }
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .logo {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+      .logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .app-name {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.2px;
+      }
+      .app-name span {
+        color: var(--accent2);
+      }
+      .version-badge {
+        font-size: 10px;
+        font-family: var(--font-mono);
+        color: var(--text-3);
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 2px 7px;
+        border-radius: 20px;
+      }
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-2);
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1;
+        transition: all 0.15s;
+      }
+      .icon-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent2);
+        background: var(--accent-bg);
+      }
+
+      /* ── Tab nav ── */
+      .tabs {
+        display: flex;
+        gap: 2px;
+        padding: 8px 10px 0;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .tab-btn {
+        flex: 1;
+        background: none;
+        border: none;
+        color: var(--text-3);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        padding: 6px 8px 8px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.18s;
+        white-space: nowrap;
+      }
+      .tab-btn:hover {
+        color: var(--text-2);
+      }
+      .tab-btn.active {
+        color: var(--accent2);
+        border-bottom-color: var(--accent);
+      }
+
+      /* ── Scroll area ── */
+      .scroll-area {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 12px 14px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border2) transparent;
+      }
+      .scroll-area::-webkit-scrollbar {
+        width: 4px;
+      }
+      .scroll-area::-webkit-scrollbar-thumb {
+        background: var(--border2);
+        border-radius: 4px;
+      }
+
+      /* ── Tab panels ── */
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+
+      /* ── Section label ── */
+      .section-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-3);
+        margin: 0 0 8px;
+      }
+
+      /* ── Global defaults card ── */
+      .defaults-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .defaults-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+      }
+      .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .field-label {
+        font-size: 10px;
+        color: var(--text-3);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .time-input {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-1);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        padding: 6px 8px;
+        width: 100%;
+        transition: border-color 0.15s;
+        outline: none;
+      }
+      .time-input:focus {
+        border-color: var(--accent);
+        background: var(--bg);
+      }
+
+      /* ── Day cards ── */
+      .day-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        margin-bottom: 8px;
+        overflow: hidden;
+        transition: border-color 0.15s;
+      }
+      .day-card.has-tasks {
+        border-color: var(--border2);
+      }
+      .day-card.disabled {
+        opacity: 0.45;
+      }
+
+      .day-header {
+        display: flex;
+        align-items: center;
+        padding: 9px 12px;
+        cursor: pointer;
+        user-select: none;
+        gap: 8px;
+      }
+      .day-header:hover {
+        background: var(--hover-overlay);
+      }
+
+      .day-toggle {
+        width: 32px;
+        height: 18px;
+        background: var(--border);
+        border-radius: 9px;
+        position: relative;
+        transition: background 0.18s;
+        flex-shrink: 0;
+      }
+      .day-toggle.on {
+        background: var(--accent);
+      }
+      .day-toggle-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.18s;
+      }
+      .day-toggle.on .day-toggle-thumb {
+        transform: translateX(14px);
+      }
+
+      .day-name {
+        font-size: 13px;
+        font-weight: 600;
+        flex: 1;
+      }
+      .day-badge {
+        font-size: 10px;
+        font-family: var(--font-mono);
+        color: var(--text-3);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 2px 7px;
+        border-radius: 12px;
+      }
+      .day-badge.active {
+        color: var(--accent2);
+        background: var(--accent-bg);
+        border-color: var(--accent-border);
+      }
+      .day-chevron {
+        color: var(--text-3);
+        transition: transform 0.18s;
+        flex-shrink: 0;
+        font-size: 16px;
+      }
+      .day-chevron.open {
+        transform: rotate(180deg);
+      }
+
+      .day-body {
+        display: none;
+        padding: 0 12px 12px;
+        border-top: 1px solid var(--border);
+      }
+      .day-body.open {
+        display: block;
+      }
+
+      /* ── Task rows ── */
+      .tasks-container {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .task-row {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 10px;
+        position: relative;
+        animation: fadeIn 0.2s ease;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      .task-row-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .task-index {
+        font-size: 10px;
+        font-family: var(--font-mono);
+        color: var(--accent2);
+        font-weight: 500;
+      }
+      .btn-remove-task {
+        background: none;
+        border: none;
+        color: var(--text-3);
+        cursor: pointer;
+        padding: 2px;
+        font-size: 15px;
+        line-height: 1;
+        transition: color 0.15s;
+      }
+      .btn-remove-task:hover {
+        color: var(--red);
+      }
+
+      .task-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .text-input {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-1);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 6px 9px;
+        width: 100%;
+        transition: border-color 0.15s;
+        outline: none;
+      }
+      .text-input::placeholder {
+        color: var(--text-3);
+      }
+      .text-input:focus {
+        border-color: var(--accent);
+      }
+
+      textarea.text-input {
+        resize: none;
+        height: 52px;
+        line-height: 1.4;
+        font-size: 12px;
+      }
+
+      .time-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+      }
+      .work-hours-row {
+        display: grid;
+        grid-template-columns: 58px 1fr;
+        align-items: center;
+        gap: 6px;
+      }
+      .work-hours-label {
+        color: var(--text-3);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+      .time-field-mini {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .time-label-mini {
+        font-size: 9px;
+        color: var(--text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+      }
+      .time-hint {
+        font-size: 9px;
+        color: var(--text-3);
+        font-family: var(--font-mono);
+      }
+      .time-hint.green {
+        color: var(--green);
+      }
+
+      .btn-add-task {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px;
+        background: none;
+        border: 1px dashed var(--border2);
+        border-radius: var(--radius-sm);
+        color: var(--text-3);
+        font-family: var(--font-sans);
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .btn-add-task:hover {
+        border-color: var(--accent);
+        color: var(--accent2);
+        background: var(--accent-bg);
+      }
+      .btn-auto-time {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        margin-top: 10px;
+        padding: 7px;
+        background: var(--green-bg);
+        border: 1px solid rgba(52,211,153,.22);
+        border-radius: var(--radius-sm);
+        color: var(--green);
+        font-family: var(--font-sans);
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      /* ── Quick presets (tab 2) ── */
+      .preset-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.15s;
+        position: relative;
+      }
+      .preset-card:hover {
+        border-color: var(--accent);
+        background: var(--surface);
+      }
+      .preset-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .preset-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .preset-days-badges {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .preset-day-pill {
+        font-size: 9px;
+        font-family: var(--font-mono);
+        padding: 2px 6px;
+        border-radius: 20px;
+        background: var(--accent-bg);
+        color: var(--accent2);
+        border: 1px solid var(--accent-border);
+      }
+      .preset-desc {
+        font-size: 11px;
+        color: var(--text-2);
+      }
+      .preset-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .preset-btn-apply {
+        flex: 1;
+        padding: 7px;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--btn-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .preset-btn-apply:hover {
+        background: var(--accent2);
+      }
+      .preset-btn-delete {
+        padding: 7px 10px;
+        background: none;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-3);
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.15s;
+      }
+      .preset-btn-delete:hover {
+        border-color: var(--red);
+        color: var(--red);
+      }
+
+      .empty-presets {
+        text-align: center;
+        padding: 24px 0;
+        color: var(--text-3);
+        font-size: 12px;
+      }
+      .empty-presets .big-icon {
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+
+      .project-search-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .project-results,
+      .saved-projects {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .project-result,
+      .saved-project {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 7px 8px;
+        font-size: 11px;
+        color: var(--text-2);
+      }
+      .project-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .project-mini-btn {
+        background: var(--accent-bg);
+        border: 1px solid var(--accent-border);
+        color: var(--accent2);
+        border-radius: var(--radius-sm);
+        font-size: 11px;
+        padding: 4px 7px;
+        cursor: pointer;
+      }
+      .project-mini-btn.danger {
+        background: none;
+        border-color: var(--border);
+        color: var(--text-3);
+      }
+      .project-mini-btn.danger:hover {
+        border-color: var(--red);
+        color: var(--red);
+      }
+      .project-select-row,
+      .task-apply-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px;
+      }
+      .project-select {
+        appearance: none;
+        min-width: 0;
+      }
+      .btn-apply-all {
+        background: var(--accent-bg);
+        border: 1px solid var(--accent-border);
+        border-radius: var(--radius-sm);
+        color: var(--accent2);
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        padding: 0 8px;
+        white-space: nowrap;
+      }
+      .btn-apply-all .apply-all-text {
+        display: none;
+      }
+
+      /* ── Footer ── */
+      .footer {
+        padding: 10px 14px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .btn-secondary {
+        flex: 0 0 auto;
+        padding: 8px 12px;
+        background: none;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-2);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .btn-secondary:hover {
+        border-color: var(--border2);
+        color: var(--text-1);
+      }
+
+      .btn-primary {
+        flex: 1;
+        padding: 8px 16px;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--btn-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .btn-primary:hover {
+        background: #6b7ff6;
+      }
+      .btn-primary:active {
+        transform: scale(0.98);
+      }
+      .btn-primary:disabled {
+        background: var(--border);
+        color: var(--text-3);
+        cursor: not-allowed;
+        transform: none;
+      }
+      .btn-primary.loading {
+        pointer-events: none;
+      }
+
+      /* ── Toast ── */
+      .toast {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--card);
+        border: 1px solid var(--border2);
+        border-radius: var(--radius);
+        padding: 10px 16px;
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        transition: all 0.22s ease;
+        pointer-events: none;
+        z-index: 999;
+        white-space: nowrap;
+        box-shadow: var(--shadow);
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      .toast.success {
+        border-color: rgba(52, 211, 153, 0.3);
+        color: var(--green);
+      }
+      .toast.error {
+        border-color: rgba(248, 113, 113, 0.3);
+        color: var(--red);
+      }
+      .toast.info {
+        border-color: var(--accent-border);
+        color: var(--accent2);
+      }
+
+      /* ── Spinner ── */
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--spinner-border);
+        border-top-color: var(--btn-text);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+
+      /* ── Status dot ── */
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-3);
+        flex-shrink: 0;
+      }
+      .status-dot.connected {
+        background: var(--green);
+        box-shadow: 0 0 6px var(--green);
+      }
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        color: var(--text-3);
+      }
+
+      body.tab-view {
+        width: 100vw;
+        height: 100vh;
+        min-height: 720px;
+        font-size: 14px;
+        align-items: center;
+        background: var(--bg);
+      }
+      body.tab-view .header,
+      body.tab-view .tabs,
+      body.tab-view .scroll-area,
+      body.tab-view .footer {
+        width: min(1120px, 100%);
+      }
+      body.tab-view .header {
+        padding: 18px 24px 14px;
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+      }
+      body.tab-view .tabs {
+        padding: 10px 18px 0;
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+      }
+      body.tab-view .scroll-area {
+        padding: 18px 24px 22px;
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        background: var(--bg);
+      }
+      body.tab-view .footer {
+        padding: 14px 24px;
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+      }
+      body.tab-view .tab-btn {
+        font-size: 14px;
+        padding: 9px 12px 12px;
+      }
+      body.tab-view .app-name {
+        font-size: 16px;
+      }
+      body.tab-view .logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+      }
+      body.tab-view .defaults-card,
+      body.tab-view .day-card,
+      body.tab-view .preset-card {
+        border-radius: 8px;
+      }
+      body.tab-view .day-header {
+        padding: 12px 14px;
+      }
+      body.tab-view .day-name,
+      body.tab-view .preset-name {
+        font-size: 14px;
+      }
+      body.tab-view .text-input,
+      body.tab-view .time-input {
+        font-size: 14px;
+        padding: 8px 10px;
+      }
+      body.tab-view textarea.text-input {
+        height: 70px;
+      }
+    body.tab-view .btn-primary,
+    body.tab-view .btn-secondary,
+    body.tab-view .btn-add-task,
+    body.tab-view .btn-auto-time {
+      font-size: 14px;
+      padding: 10px 14px;
+    }
+      body.tab-view .btn-primary {
+        flex: 1;
+        justify-content: center;
+      }
+      body.tab-view .project-search-row {
+        grid-template-columns: 1fr 120px;
+      }
+      body.tab-view .btn-apply-all {
+        font-size: 12px;
+        padding: 0 10px;
+      }
+      body.tab-view .btn-apply-all .apply-all-text {
+        display: inline;
+        margin-left: 5px;
+      }
+
+      /* Theme picker */
+      .theme-picker {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .theme-swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: border-color 0.15s, transform 0.15s;
+      }
+      .theme-swatch:hover {
+        transform: scale(1.15);
+      }
+      .theme-swatch.active {
+        border-color: var(--text-1);
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+
+      /* Mode toggle */
+      .mode-toggle {
+        display: inline-flex;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+      .mode-btn {
+        padding: 5px 12px;
+        font-size: 12px;
+        font-family: var(--font-sans);
+        background: transparent;
+        border: none;
+        color: var(--text-3);
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+      }
+      .mode-btn:hover {
+        color: var(--text-2);
+      }
+      .mode-btn.active {
+        background: var(--accent-bg);
+        color: var(--accent2);
+      }
+
+
+      .btn-add-task.coming-soon {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+      .btn-add-task.coming-soon:hover {
+        border-color: var(--border2);
+        color: var(--text-3);
+        background: none;
+      }
+      .soon-badge {
+        font-size: 9px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--card);
+        color: var(--text-3);
+        margin-left: 4px;
+      }
+      .product-footer {
+        text-align: center;
+        padding: 8px 14px;
+        font-size: 11px;
+        color: var(--text-3);
+        flex-shrink: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+      }
+      .product-footer span {
+        color: var(--text-2);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">
+          <img id="logoImg" src="icons/icon48.png" alt="Timesheet AutoFill" />
+        </div>
+        <span class="app-name">Timesheet <span>AutoFill</span></span>
+      </div>
+      <div class="header-right">
+        <div class="status-row">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Checking...</span>
+        </div>
+        <div class="header-actions">
+          <button
+            class="icon-btn"
+            id="btnHelp"
+            title="Hướng dẫn sử dụng"
+          >
+            ?
+          </button>
+          <button
+            class="icon-btn"
+            id="btnOpenTab"
+            title="Mở extension trong tab mới"
+          >
+            ↗
+          </button>
+          <span class="version-badge">v1.0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="fill">✦ Điền task</button>
+      <button class="tab-btn" data-tab="presets">◈ Presets</button>
+      <button class="tab-btn" data-tab="settings">⚙ Cài đặt</button>
+    </div>
+
+    <!-- Scroll area -->
+    <div class="scroll-area">
+      <!-- TAB: FILL -->
+      <div class="tab-panel active" id="tab-fill">
+        <p class="section-label">Giờ mặc định cho tuần</p>
+        <div class="defaults-card">
+          <div class="defaults-grid">
+            <div class="field-group">
+              <span class="field-label">Start</span>
+              <input
+                type="text"
+                class="time-input"
+                id="defaultStart"
+                value="09:00"
+                placeholder="09:00"
+              />
+            </div>
+            <div class="field-group">
+              <span class="field-label">Break</span>
+              <input
+                type="text"
+                class="time-input"
+                id="defaultBreak"
+                value="01:30"
+                placeholder="01:30"
+              />
+            </div>
+            <div class="field-group">
+              <span class="field-label">Finish</span>
+              <input
+                type="text"
+                class="time-input"
+                id="defaultFinish"
+                value="18:30"
+                placeholder="18:30"
+              />
+            </div>
+          </div>
+        </div>
+
+        <p class="section-label">Các ngày trong tuần</p>
+        <div id="daysContainer"></div>
+      </div>
+
+      <!-- TAB: PRESETS -->
+      <div class="tab-panel" id="tab-presets">
+        <p class="section-label" style="margin-bottom: 10px">
+          Project trong preset
+        </p>
+        <div class="defaults-card">
+          <div class="project-search-row">
+            <input
+              type="text"
+              class="text-input"
+              id="projectKeyword"
+              placeholder="Nhập keyword project..."
+            />
+            <button class="btn-secondary" id="btnSearchProjects">Tìm</button>
+          </div>
+          <div id="projectResults" class="project-results"></div>
+          <p class="section-label" style="margin-top: 12px; margin-bottom: 8px">
+            Project đã lưu
+          </p>
+          <div id="savedProjectsContainer" class="saved-projects"></div>
+        </div>
+
+        <p class="section-label" style="margin-bottom: 10px">Preset đã lưu</p>
+        <div id="presetsContainer"></div>
+        <button class="btn-add-task" id="btnSavePreset" style="margin-top: 4px">
+          <span>＋</span> Lưu cấu hình hiện tại thành preset
+        </button>
+      </div>
+
+      <!-- TAB: SETTINGS -->
+      <div class="tab-panel" id="tab-settings">
+        <p class="section-label">Kết nối</p>
+        <div class="defaults-card">
+          <div class="field-group" style="margin-bottom: 10px">
+            <span class="field-label">URL Timesheet</span>
+            <input
+              type="text"
+              class="text-input"
+              id="settingUrl"
+              value="http://10.145.48.117:9099"
+              placeholder="http://..."
+              style="font-family: var(--font-mono); font-size: 11px"
+            />
+          </div>
+          <p style="font-size: 11px; color: var(--text-3); line-height: 1.5">
+            Extension sẽ hoạt động trên URL này. Sau khi thay đổi, lưu và mở lại
+            trang timesheet.
+          </p>
+        </div>
+
+        <p class="section-label" style="margin-top: 12px">Giao diện</p>
+        <div class="defaults-card">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px">
+            <span class="field-label">Chế độ</span>
+            <div class="mode-toggle" id="modeToggle">
+              <button class="mode-btn active" data-mode="dark">🌙 Tối</button>
+              <button class="mode-btn" data-mode="light">☀️ Sáng</button>
+            </div>
+          </div>
+          <span class="field-label" style="display: block; margin-bottom: 8px">Màu chủ đạo</span>
+          <div class="theme-picker" id="themePicker">
+            <div class="theme-swatch" data-theme="cyan" style="background:#22B8F0" title="Cyan"></div>
+            <div class="theme-swatch" data-theme="teal" style="background:#10D2B0" title="Teal"></div>
+            <div class="theme-swatch" data-theme="lime" style="background:#75E51B" title="Lime"></div>
+            <div class="theme-swatch" data-theme="magenta" style="background:#F018B8" title="Magenta"></div>
+            <div class="theme-swatch" data-theme="red" style="background:#FF1F5B" title="Red"></div>
+            <div class="theme-swatch" data-theme="orange" style="background:#FF861A" title="Orange"></div>
+            <div class="theme-swatch" data-theme="yellow" style="background:#FFE12B" title="Yellow"></div>
+          </div>
+        </div>
+
+        <p class="section-label" style="margin-top: 12px">Dữ liệu</p>
+        <div class="defaults-card">
+          <div style="display: flex; gap: 8px">
+            <button class="btn-secondary" id="btnExport" style="flex: 1">
+              ↑ Xuất config
+            </button>
+            <button class="btn-secondary" id="btnImport" style="flex: 1">
+              ↓ Nhập config
+            </button>
+            <input
+              type="file"
+              id="importInput"
+              accept=".json"
+              style="display: none"
+            />
+          </div>
+          <div style="margin-top: 8px">
+            <button
+              class="btn-secondary"
+              id="btnClearAll"
+              style="
+                width: 100%;
+                color: var(--red);
+                border-color: var(--red-bg);
+              "
+            >
+              🗑 Xoá toàn bộ dữ liệu
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button class="btn-secondary" id="btnClear">Xoá form</button>
+      <button class="btn-primary" id="btnFill">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        >
+          <path d="M5 12l5 5L20 7" />
+        </svg>
+        Điền timesheet
+      </button>
+    </div>
+
+    <div class="product-footer">Timesheet AutoFill v1.0 &middot; Built with <span>&hearts;</span> for OpenWay by <span>@tuannha</span></div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script src="popup-core.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
