@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Timesheet AutoFill",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Tự động điền timesheet hàng tuần với một cú click",
   "permissions": [
     "storage",

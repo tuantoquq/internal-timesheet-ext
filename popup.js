@@ -942,6 +942,7 @@ async function applyPreset(idx) {
     .forEach((p) => p.classList.remove('active'));
   document.querySelector('[data-tab="fill"]').classList.add('active');
   document.getElementById('tab-fill').classList.add('active');
+  updateActionFooterVisibility('fill');
 
   renderDays();
   showToast(`Đã áp dụng preset "${preset.name}"`, 'success');

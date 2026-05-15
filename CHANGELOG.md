@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.2] - 2026-05-15
+
+- Fix footer ext error
+
+
 ## [1.0.1] - 2026-05-15
 
 - Correct showing the version
