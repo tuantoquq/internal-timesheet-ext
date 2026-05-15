@@ -65,6 +65,7 @@ const UPDATE_COMMAND = 'update.bat';
 // ── Init ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   applyViewMode();
+  renderManifestVersion();
   await loadState();
   applyTheme(state.themeColor || 'cyan');
   applyThemeMode(state.themeMode || 'dark');
@@ -75,6 +76,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   initUpdatePanel();
   checkPageConnection();
 });
+
+function renderManifestVersion() {
+  const version = `v${chrome.runtime.getManifest().version}`;
+  const headerVersion = document.getElementById('headerVersion');
+  const footerVersion = document.getElementById('footerVersion');
+  if (headerVersion) headerVersion.textContent = version;
+  if (footerVersion) footerVersion.textContent = version;
+}
 
 function applyViewMode() {
   if (Core.isTabView(window.location.search)) {

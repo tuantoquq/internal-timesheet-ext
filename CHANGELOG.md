@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.1] - 2026-05-15
+
+- Correct showing the version
+
+
 ## [1.0.0] - 2026-05-15
 
 - Initial public GitHub-ready release.
