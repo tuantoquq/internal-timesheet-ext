@@ -57,6 +57,10 @@ let state = {
 };
 
 const Core = window.TimesheetCore;
+const REPO_URL = 'https://github.com/tuantoquq/internal-timesheet-ext';
+const CHANGELOG_URL =
+  'https://raw.githubusercontent.com/tuantoquq/internal-timesheet-ext/main/CHANGELOG.md';
+const UPDATE_COMMAND = 'update.bat';
 
 // ── Init ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -67,6 +71,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderDays();
   renderPresetTab();
   bindGlobalEvents();
+  updateActionFooterVisibility('fill');
+  initUpdatePanel();
   checkPageConnection();
 });
 
@@ -375,6 +381,7 @@ function bindGlobalEvents() {
         .forEach((p) => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+      updateActionFooterVisibility(btn.dataset.tab);
       if (btn.dataset.tab === 'presets') renderPresetTab();
     });
   });
@@ -492,6 +499,15 @@ function bindGlobalEvents() {
   document
     .getElementById('btnClearAll')
     .addEventListener('click', clearAllData);
+  document
+    .getElementById('btnCheckUpdate')
+    .addEventListener('click', checkForUpdates);
+  document
+    .getElementById('btnCopyUpdate')
+    .addEventListener('click', copyUpdateCommand);
+  document
+    .getElementById('btnOpenRepo')
+    .addEventListener('click', () => chrome.tabs.create({ url: REPO_URL }));
   document.getElementById('settingUrl').addEventListener('change', (e) => {
     state.settingUrl = e.target.value;
     saveState();
@@ -524,6 +540,70 @@ async function openInTab() {
   await chrome.tabs.create({ url });
   if (Core.shouldClosePopupAfterOpen(window.location.search)) {
     window.close();
+  }
+}
+
+function updateActionFooterVisibility(activeTab) {
+  const footer = document.getElementById('actionFooter');
+  if (!footer) return;
+  footer.style.display = activeTab === 'fill' ? 'flex' : 'none';
+}
+
+function initUpdatePanel() {
+  const current = chrome.runtime.getManifest().version;
+  const currentEl = document.getElementById('currentVersion');
+  if (currentEl) currentEl.textContent = current;
+  checkForUpdates();
+}
+
+async function checkForUpdates() {
+  const current = chrome.runtime.getManifest().version;
+  const latestEl = document.getElementById('latestVersion');
+  const statusEl = document.getElementById('updateStatus');
+  const actionsEl = document.getElementById('updateActions');
+  const checkBtn = document.getElementById('btnCheckUpdate');
+
+  latestEl.textContent = 'Đang kiểm tra...';
+  statusEl.className = 'update-status';
+  statusEl.textContent = 'Đang kiểm tra cập nhật từ GitHub...';
+  actionsEl.classList.remove('show');
+  checkBtn.disabled = true;
+
+  try {
+    const res = await fetch(`${CHANGELOG_URL}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const changelog = await res.text();
+    const latest = Core.getLatestVersionFromChangelog(changelog);
+    if (!latest) throw new Error('Không tìm thấy version trong CHANGELOG.md');
+
+    latestEl.textContent = latest;
+    const comparison = Core.compareVersions(current, latest);
+    if (comparison < 0) {
+      statusEl.className = 'update-status available';
+      statusEl.textContent =
+        `Có bản cập nhật mới ${latest}. Chạy ${UPDATE_COMMAND} trong thư mục extension, sau đó reload extension ở chrome://extensions.`;
+      actionsEl.classList.add('show');
+    } else {
+      statusEl.className = 'update-status current';
+      statusEl.textContent = 'Bạn đang dùng phiên bản mới nhất.';
+    }
+  } catch (err) {
+    latestEl.textContent = '-';
+    statusEl.className = 'update-status';
+    statusEl.textContent =
+      'Không kiểm tra được version mới. Hãy kiểm tra kết nối mạng hoặc quyền truy cập GitHub raw.';
+  } finally {
+    checkBtn.disabled = false;
+  }
+}
+
+async function copyUpdateCommand() {
+  const command = `cd /d "%~dp0"\r\ngit pull --ff-only\r\n`;
+  try {
+    await navigator.clipboard.writeText(`${UPDATE_COMMAND}\n\n${command}`);
+    showToast('Đã copy hướng dẫn update', 'success');
+  } catch (e) {
+    showToast(`Chạy file ${UPDATE_COMMAND} trong thư mục extension`, 'info');
   }
 }
 

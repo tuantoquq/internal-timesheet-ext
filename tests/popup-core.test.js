@@ -6,9 +6,11 @@ const {
   clearTasks,
   collectProjectOptions,
   getPopupPageUrl,
+  getLatestVersionFromChangelog,
   isTabView,
   isBlankSearch,
   normalizeTimeValue,
+  compareVersions,
   parseWorkHours,
   removeTaskFromDay,
   scheduleTasksForDay,
@@ -216,4 +218,25 @@ test('timesheet tab selection prefers active timesheet, then another matching ta
   assert.equal(selectTimesheetTab(tabs, 'http://10.145.48.117:9099').id, 2);
   assert.equal(selectTimesheetTab([{ ...tabs[1], active: true }, tabs[0]], 'http://10.145.48.117:9099').id, 2);
   assert.equal(selectTimesheetTab(tabs, 'http://example.local'), null);
+});
+
+test('latest version parser reads first changelog version heading', () => {
+  const changelog = `
+    # Changelog
+
+    ## [1.2.3] - 2026-05-15
+    - Add update checker
+
+    ## [1.2.2] - 2026-05-10
+    - Previous release
+  `;
+
+  assert.equal(getLatestVersionFromChangelog(changelog), '1.2.3');
+});
+
+test('version comparison handles semantic versions', () => {
+  assert.equal(compareVersions('1.2.3', '1.2.4'), -1);
+  assert.equal(compareVersions('1.2.3', '1.2.3'), 0);
+  assert.equal(compareVersions('1.10.0', '1.2.9'), 1);
+  assert.equal(compareVersions('2.0.0', '10.0.0'), -1);
 });

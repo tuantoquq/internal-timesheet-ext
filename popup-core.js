@@ -369,13 +369,33 @@
     return `${d}/${m}/${y}`;
   }
 
+  function getLatestVersionFromChangelog(changelog) {
+    const text = String(changelog || '');
+    const match = text.match(/^\s*##\s+\[?v?(\d+\.\d+\.\d+)\]?/m);
+    return match ? match[1] : '';
+  }
+
+  function compareVersions(current, latest) {
+    const currentParts = String(current || '0.0.0').split('.').map(Number);
+    const latestParts = String(latest || '0.0.0').split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      const a = Number.isFinite(currentParts[i]) ? currentParts[i] : 0;
+      const b = Number.isFinite(latestParts[i]) ? latestParts[i] : 0;
+      if (a > b) return 1;
+      if (a < b) return -1;
+    }
+    return 0;
+  }
+
   return {
     addSavedProject,
     addTaskToDay,
     clearTasks,
+    compareVersions,
     collectProjectOptions,
     createEmptyTask,
     extractProjects,
+    getLatestVersionFromChangelog,
     getPopupPageUrl,
     getWeekEndingDate,
     isBlankSearch,

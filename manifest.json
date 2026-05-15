@@ -11,7 +11,8 @@
   ],
   "host_permissions": [
     "http://10.145.48.117:9099/*",
-    "http://10.145.48.117/*"
+    "http://10.145.48.117/*",
+    "https://raw.githubusercontent.com/tuantoquq/internal-timesheet-ext/*"
   ],
   "action": {
     "default_popup": "popup.html",

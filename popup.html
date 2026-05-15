@@ -719,6 +719,110 @@
         border-color: var(--border2);
         color: var(--text-1);
       }
+      .btn-danger-soft {
+        border-color: rgba(248, 113, 113, 0.34);
+        color: #fca5a5;
+      }
+      .btn-danger-soft:hover {
+        border-color: rgba(248, 113, 113, 0.55);
+        color: #fecaca;
+        background: var(--red-bg);
+      }
+      .btn-save-preset {
+        flex: 0 0 auto;
+        padding: 8px 12px;
+        background: var(--accent-bg);
+        border-color: var(--accent-border);
+        color: var(--accent2);
+        font-weight: 600;
+      }
+      .btn-save-preset:hover {
+        border-color: var(--accent);
+        color: var(--accent2);
+        background: var(--accent-bg);
+      }
+      .config-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .btn-config-action {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 42px;
+        background: var(--accent-bg);
+        border-color: var(--accent-border);
+        color: var(--accent2);
+        font-weight: 600;
+      }
+      .btn-config-action:hover {
+        border-color: var(--accent);
+        background: rgba(34, 184, 240, 0.18);
+        color: var(--accent2);
+        transform: translateY(-1px);
+      }
+      .btn-config-action .config-icon {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--surface);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1;
+      }
+      .version-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .version-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 9px 10px;
+      }
+      .version-value {
+        margin-top: 3px;
+        color: var(--text-1);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .update-status {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 9px 10px;
+        color: var(--text-2);
+        font-size: 11px;
+        line-height: 1.5;
+        background: var(--surface);
+      }
+      .update-status.available {
+        color: var(--accent2);
+        border-color: var(--accent-border);
+        background: var(--accent-bg);
+      }
+      .update-status.current {
+        color: var(--green);
+        border-color: rgba(52, 211, 153, 0.22);
+        background: var(--green-bg);
+      }
+      .update-actions {
+        display: none;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .update-actions.show {
+        display: grid;
+      }
 
       .btn-primary {
         flex: 1;
@@ -894,13 +998,13 @@
       body.tab-view textarea.text-input {
         height: 70px;
       }
-    body.tab-view .btn-primary,
-    body.tab-view .btn-secondary,
-    body.tab-view .btn-add-task,
-    body.tab-view .btn-auto-time {
-      font-size: 14px;
-      padding: 10px 14px;
-    }
+      body.tab-view .btn-primary,
+      body.tab-view .btn-secondary,
+      body.tab-view .btn-add-task,
+      body.tab-view .btn-auto-time {
+        font-size: 14px;
+        padding: 10px 14px;
+      }
       body.tab-view .btn-primary {
         flex: 1;
         justify-content: center;
@@ -1106,13 +1210,40 @@
 
         <p class="section-label" style="margin-bottom: 10px">Preset đã lưu</p>
         <div id="presetsContainer"></div>
-        <button class="btn-add-task" id="btnSavePreset" style="margin-top: 4px">
-          <span>＋</span> Lưu cấu hình hiện tại thành preset
-        </button>
       </div>
 
       <!-- TAB: SETTINGS -->
       <div class="tab-panel" id="tab-settings">
+        <p class="section-label">Phiên bản</p>
+        <div class="defaults-card">
+          <div class="version-grid">
+            <div class="version-box">
+              <span class="field-label">Hiện tại</span>
+              <div class="version-value" id="currentVersion">-</div>
+            </div>
+            <div class="version-box">
+              <span class="field-label">Mới nhất</span>
+              <div class="version-value" id="latestVersion">Đang kiểm tra...</div>
+            </div>
+          </div>
+          <div class="update-status" id="updateStatus">
+            Đang kiểm tra cập nhật từ GitHub...
+          </div>
+          <div class="update-actions" id="updateActions">
+            <button class="btn-secondary btn-config-action" id="btnCopyUpdate">
+              <span class="config-icon">⧉</span>
+              <span>Copy lệnh</span>
+            </button>
+            <button class="btn-secondary btn-config-action" id="btnOpenRepo">
+              <span class="config-icon">↗</span>
+              <span>GitHub</span>
+            </button>
+          </div>
+          <button class="btn-secondary" id="btnCheckUpdate" style="width:100%; margin-top:10px;">
+            Kiểm tra lại
+          </button>
+        </div>
+
         <p class="section-label">Kết nối</p>
         <div class="defaults-card">
           <div class="field-group" style="margin-bottom: 10px">
@@ -1155,12 +1286,14 @@
 
         <p class="section-label" style="margin-top: 12px">Dữ liệu</p>
         <div class="defaults-card">
-          <div style="display: flex; gap: 8px">
-            <button class="btn-secondary" id="btnExport" style="flex: 1">
-              ↑ Xuất config
+          <div class="config-actions">
+            <button class="btn-secondary btn-config-action" id="btnExport">
+              <span class="config-icon">↑</span>
+              <span>Xuất config</span>
             </button>
-            <button class="btn-secondary" id="btnImport" style="flex: 1">
-              ↓ Nhập config
+            <button class="btn-secondary btn-config-action" id="btnImport">
+              <span class="config-icon">↓</span>
+              <span>Nhập config</span>
             </button>
             <input
               type="file"
@@ -1187,8 +1320,11 @@
     </div>
 
     <!-- Footer -->
-    <div class="footer">
-      <button class="btn-secondary" id="btnClear">Xoá form</button>
+    <div class="footer" id="actionFooter">
+      <button class="btn-secondary btn-danger-soft" id="btnClear">Xoá form</button>
+      <button class="btn-secondary btn-save-preset" id="btnSavePreset">
+        ＋ Lưu preset
+      </button>
       <button class="btn-primary" id="btnFill">
         <svg
           width="14"
