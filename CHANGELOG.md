@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.3] - 2026-05-18
+
+- Update to support multi tasks
+
+
 ## [1.0.2] - 2026-05-15
 
 - Fix footer ext error
