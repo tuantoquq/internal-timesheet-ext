@@ -248,10 +248,11 @@ function buildDayCard(day, dayState) {
     </div>
     <div class="day-body${expanded ? ' open' : ''}" id="body-${code}">
       <div class="tasks-container" id="tasks-${code}">
-        ${(dayState.tasks || []).slice(0, 1).map((t, i) => buildTaskRow(code, i, t, false)).join('')}
+        ${(dayState.tasks || []).map((t, i) => buildTaskRow(code, i, t, showWorkHours)).join('')}
       </div>
-      <div style="text-align:center; padding:8px; color:var(--text-3); font-size:10px; border-top:1px dashed var(--accent-border); opacity:0.7;">
-        <span style="vertical-align:middle;">◈</span> Multi-task: Coming soon
+      <div class="task-actions-row">
+        <button class="btn-add-task" data-day="${code}" type="button">+ Add task</button>
+        ${showWorkHours ? `<button class="btn-auto-time" data-day="${code}" type="button">Auto time</button>` : ''}
       </div>
     </div>
   `;
@@ -269,7 +270,10 @@ function buildDayCard(day, dayState) {
     if (state.days[code]?.enabled) toggleExpand(code);
   });
 
-  // Multi-task disabled
+  card.querySelector('.btn-add-task')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    addTask(code);
+  });
 
   return card;
 }
