@@ -1,19 +1,27 @@
 {
   "manifest_version": 3,
   "name": "Timesheet AutoFill",
-  "version": "1.0.3",
-  "description": "Tự động điền timesheet hàng tuần với một cú click",
+  "version": "1.1.0",
+  "description": "Tự động điền và submit timesheet hàng tuần",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
   "host_permissions": [
-    "http://10.145.48.117:9099/*",
-    "http://10.145.48.117/*",
-    "https://raw.githubusercontent.com/tuantoquq/internal-timesheet-ext/*"
+    "http://10.145.48.117:9099/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "timesheet-autofill@openway",
+      "strict_min_version": "109.0"
+    }
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -38,9 +46,5 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  },
-  "options_ui": {
-    "page": "options.html",
-    "open_in_tab": true
   }
 }

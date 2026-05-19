@@ -13,35 +13,33 @@ const DAYS = [
 // Weekdays enabled by default
 const DEFAULT_ENABLED = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
-
-
 // ── Theme colors (OpenWay logo) ───────────────────────
 const THEME_COLORS = [
-  { id: 'cyan',    label: 'Cyan',    hex: '#22B8F0', rgb: '34,184,240'   },
-  { id: 'teal',    label: 'Teal',    hex: '#10D2B0', rgb: '16,210,176'   },
-  { id: 'lime',    label: 'Lime',    hex: '#75E51B', rgb: '117,229,27'   },
-  { id: 'magenta', label: 'Magenta', hex: '#F018B8', rgb: '240,24,184'   },
-  { id: 'red',     label: 'Red',     hex: '#FF1F5B', rgb: '255,31,91'    },
-  { id: 'orange',  label: 'Orange',  hex: '#FF861A', rgb: '255,134,26'   },
-  { id: 'yellow',  label: 'Yellow',  hex: '#FFE12B', rgb: '255,225,43'   },
+  { id: 'cyan', label: 'Cyan', hex: '#22B8F0', rgb: '34,184,240' },
+  { id: 'teal', label: 'Teal', hex: '#10D2B0', rgb: '16,210,176' },
+  { id: 'lime', label: 'Lime', hex: '#75E51B', rgb: '117,229,27' },
+  { id: 'magenta', label: 'Magenta', hex: '#F018B8', rgb: '240,24,184' },
+  { id: 'red', label: 'Red', hex: '#FF1F5B', rgb: '255,31,91' },
+  { id: 'orange', label: 'Orange', hex: '#FF861A', rgb: '255,134,26' },
+  { id: 'yellow', label: 'Yellow', hex: '#FFE12B', rgb: '255,225,43' },
 ];
 
 function applyTheme(themeId, mode) {
-  const t = THEME_COLORS.find(c => c.id === themeId) || THEME_COLORS[0];
+  const t = THEME_COLORS.find((c) => c.id === themeId) || THEME_COLORS[0];
   const r = document.documentElement.style;
   r.setProperty('--accent', t.hex);
   r.setProperty('--accent2', t.hex);
   r.setProperty('--accent-bg', `rgba(${t.rgb}, 0.12)`);
   r.setProperty('--accent-border', `rgba(${t.rgb}, 0.25)`);
   // Update active swatch
-  document.querySelectorAll('.theme-swatch').forEach(s => {
+  document.querySelectorAll('.theme-swatch').forEach((s) => {
     s.classList.toggle('active', s.dataset.theme === themeId);
   });
 }
 
 function applyThemeMode(mode) {
   document.body.classList.toggle('light-theme', mode === 'light');
-  document.querySelectorAll('.mode-btn').forEach(b => {
+  document.querySelectorAll('.mode-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
 }
@@ -53,6 +51,10 @@ let state = {
   savedProjects: ['INTA-3578_Self Study (Hanoi) /147382'],
   themeColor: 'cyan',
   themeMode: 'dark',
+  settingUrl: 'http://10.145.48.117:9099',
+  autoPost: false,
+  weekEnding: '',
+  auth: { loggedIn: false, username: '' },
   days: {},
 };
 
@@ -61,6 +63,7 @@ const REPO_URL = 'https://github.com/tuantoquq/internal-timesheet-ext';
 const CHANGELOG_URL =
   'https://raw.githubusercontent.com/tuantoquq/internal-timesheet-ext/main/CHANGELOG.md';
 const UPDATE_COMMAND = 'update.bat';
+let lastSubmitDetailUrl = '';
 
 // ── Init ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -69,12 +72,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadState();
   applyTheme(state.themeColor || 'cyan');
   applyThemeMode(state.themeMode || 'dark');
-  renderDays();
-  renderPresetTab();
   bindGlobalEvents();
-  updateActionFooterVisibility('fill');
-  initUpdatePanel();
-  checkPageConnection();
+  bindHeadlessEvents();
+  await checkLoginStatus();
+  renderAuthScreen();
 });
 
 function renderManifestVersion() {
@@ -113,6 +114,10 @@ function createDefaultState() {
     defaultBreak: '01:30',
     defaultFinish: '18:30',
     savedProjects: ['INTA-3578_Self Study (Hanoi) /147382'],
+    settingUrl: 'http://10.145.48.117:9099',
+    autoPost: false,
+    weekEnding: Core.getWeekEndingDate(),
+    auth: { loggedIn: false, username: '' },
     days: {},
   };
   DAYS.forEach((d) => {
@@ -127,14 +132,31 @@ function createDefaultState() {
 }
 
 function normalizeState(nextState) {
-  nextState.defaultStart = Core.normalizeTimeValue(nextState.defaultStart || '09:00');
-  nextState.defaultBreak = Core.normalizeTimeValue(nextState.defaultBreak || '01:30');
-  nextState.defaultFinish = Core.normalizeTimeValue(nextState.defaultFinish || '18:30');
+  nextState.defaultStart = Core.normalizeTimeValue(
+    nextState.defaultStart || '09:00',
+  );
+  nextState.defaultBreak = Core.normalizeTimeValue(
+    nextState.defaultBreak || '01:30',
+  );
+  nextState.defaultFinish = Core.normalizeTimeValue(
+    nextState.defaultFinish || '18:30',
+  );
   nextState.savedProjects = Array.isArray(nextState.savedProjects)
     ? nextState.savedProjects
     : [];
   nextState.themeColor = nextState.themeColor || 'cyan';
   nextState.themeMode = nextState.themeMode || 'dark';
+  nextState.settingUrl = (
+    nextState.settingUrl || 'http://10.145.48.117:9099'
+  ).replace(/\/$/, '');
+  nextState.autoPost = nextState.autoPost === true;
+  nextState.weekEnding = nextState.weekEnding || Core.getWeekEndingDate();
+  nextState.auth = nextState.auth || { loggedIn: false, username: '' };
+  nextState.auth.loggedIn = nextState.auth.loggedIn === true;
+  nextState.auth.username = nextState.auth.username || '';
+  nextState.auth.displayName =
+    nextState.auth.displayName || nextState.auth.username || '';
+  delete nextState.auth.password;
   nextState.days = nextState.days || {};
   DAYS.forEach((d) => {
     if (!nextState.days[d.code]) {
@@ -148,21 +170,72 @@ function normalizeState(nextState) {
 }
 
 async function getConfiguredBaseUrl() {
-  const stored = await new Promise((r) =>
-    chrome.storage.local.get(['timesheetState'], r),
-  );
-  return (
-    stored?.timesheetState?.settingUrl || 'http://10.145.48.117:9099'
-  ).replace(/\/$/, '');
+  return (state.settingUrl || 'http://10.145.48.117:9099').replace(/\/$/, '');
 }
 
 async function findTimesheetTab() {
   const baseUrl = await getConfiguredBaseUrl();
-  const tabs = await chrome.tabs.query({});
+  const tabs = await queryTabs({});
   return {
     baseUrl,
     tab: Core.selectTimesheetTab(tabs, baseUrl),
   };
+}
+
+function isLoggedIn() {
+  return state.auth?.loggedIn === true;
+}
+
+function renderAuthScreen() {
+  const loginScreen = document.getElementById('loginScreen');
+  const appScreen = document.getElementById('appScreen');
+  const loginUrl = document.getElementById('loginBaseUrl');
+  const loginUsername = document.getElementById('loginUsernameMain');
+  if (loginUrl)
+    loginUrl.value = state.settingUrl || 'http://10.145.48.117:9099';
+  if (loginUsername && state.auth?.username)
+    loginUsername.value = state.auth.username;
+
+  if (isLoggedIn()) {
+    loginScreen?.classList.add('screen-hidden');
+    appScreen?.classList.remove('screen-hidden');
+    renderDays();
+    renderPresetTab();
+    updateActionFooterVisibility('fill');
+    initUpdatePanel();
+  } else {
+    appScreen?.classList.add('screen-hidden');
+    loginScreen?.classList.remove('screen-hidden');
+  }
+}
+
+function setLoginError(message) {
+  const el = document.getElementById('loginError');
+  if (el) el.textContent = message || '';
+}
+
+function dateToDisplay(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : '';
+}
+
+function displayToDate(value) {
+  const match = String(value || '')
+    .trim()
+    .match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+}
+
+function syncWeekEndingInputs(source) {
+  const textInput = document.getElementById('weekEndingInput');
+  const picker = document.getElementById('weekEndingPicker');
+  if (!textInput || !picker) return;
+  if (source === 'picker') {
+    textInput.value = dateToDisplay(picker.value) || textInput.value;
+  } else {
+    picker.value = displayToDate(textInput.value) || '';
+  }
+  state.weekEnding = textInput.value.trim() || Core.getWeekEndingDate();
 }
 
 async function saveState(options = {}) {
@@ -177,6 +250,17 @@ async function persistState() {
 }
 
 function collectFromDOM() {
+  state.settingUrl = (
+    document.getElementById('settingUrl')?.value ||
+    document.getElementById('loginBaseUrl')?.value ||
+    state.settingUrl ||
+    'http://10.145.48.117:9099'
+  ).replace(/\/$/, '');
+  state.autoPost = document.getElementById('settingAutoPost')?.checked === true;
+  state.weekEnding =
+    document.getElementById('weekEndingInput')?.value.trim() ||
+    state.weekEnding ||
+    Core.getWeekEndingDate();
   state.defaultStart =
     document.getElementById('defaultStart')?.value || state.defaultStart;
   state.defaultBreak =
@@ -210,10 +294,17 @@ function renderDays() {
   document.getElementById('defaultStart').value = state.defaultStart;
   document.getElementById('defaultBreak').value = state.defaultBreak;
   document.getElementById('defaultFinish').value = state.defaultFinish;
+  document.getElementById('weekEndingInput').value =
+    state.weekEnding || Core.getWeekEndingDate();
+  syncWeekEndingInputs('text');
   if (state.settingUrl) {
     const urlInput = document.getElementById('settingUrl');
+    const loginUrlInput = document.getElementById('loginBaseUrl');
     if (urlInput) urlInput.value = state.settingUrl;
+    if (loginUrlInput) loginUrlInput.value = state.settingUrl;
   }
+  const autoPostInput = document.getElementById('settingAutoPost');
+  if (autoPostInput) autoPostInput.checked = state.autoPost === true;
 
   DAYS.forEach((d) => {
     const dayState = state.days[d.code] || {
@@ -312,14 +403,18 @@ function buildTaskRow(dayCode, index, taskData = {}, showWorkHours = false) {
             <span aria-hidden="true">⇉</span><span class="apply-all-text">Apply All</span>
           </button>
         </div>
-        ${showWorkHours ? `
+        ${
+          showWorkHours
+            ? `
           <div class="work-hours-row">
             <span class="work-hours-label">Hours</span>
             <input type="number" class="time-input" data-field="workHours"
               min="0.25" step="0.25" placeholder="vd: 2.5"
               value="${escHtml(taskData.workHours || '')}" style="font-size:12px;padding:5px 7px;" />
           </div>
-        ` : ''}
+        `
+            : ''
+        }
         <div class="time-row">
           <div class="time-field-mini">
             <span class="time-label-mini">Start</span>
@@ -470,13 +565,24 @@ function bindGlobalEvents() {
       });
     });
   });
+  document.getElementById('weekEndingInput')?.addEventListener('change', () => {
+    syncWeekEndingInputs('text');
+    collectFromDOM();
+    persistState();
+  });
+  document
+    .getElementById('weekEndingPicker')
+    ?.addEventListener('change', () => {
+      syncWeekEndingInputs('picker');
+      collectFromDOM();
+      persistState();
+    });
 
   // Footer buttons
   document.getElementById('btnOpenTab').addEventListener('click', openInTab);
   document.getElementById('btnHelp').addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
   });
-  document.getElementById('btnFill').addEventListener('click', runFill);
   document.getElementById('btnClear').addEventListener('click', clearForm);
 
   // Preset save
@@ -522,13 +628,20 @@ function bindGlobalEvents() {
     .getElementById('btnOpenRepo')
     .addEventListener('click', () => chrome.tabs.create({ url: REPO_URL }));
   document.getElementById('settingUrl').addEventListener('change', (e) => {
-    state.settingUrl = e.target.value;
+    state.settingUrl = e.target.value.replace(/\/$/, '');
+    document.getElementById('loginBaseUrl').value = state.settingUrl;
+    chrome.runtime.sendMessage({ action: 'setBaseUrl', url: state.settingUrl });
     saveState();
   });
-
+  document
+    .getElementById('settingAutoPost')
+    ?.addEventListener('change', (e) => {
+      state.autoPost = e.target.checked;
+      saveState();
+    });
 
   // Theme mode toggle
-  document.querySelectorAll('.mode-btn').forEach(btn => {
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.mode;
       state.themeMode = mode;
@@ -538,7 +651,7 @@ function bindGlobalEvents() {
   });
 
   // Theme selector
-  document.querySelectorAll('.theme-swatch').forEach(sw => {
+  document.querySelectorAll('.theme-swatch').forEach((sw) => {
     sw.addEventListener('click', () => {
       const id = sw.dataset.theme;
       state.themeColor = id;
@@ -548,10 +661,13 @@ function bindGlobalEvents() {
   });
 }
 
-async function openInTab() {
+async function openInTab(options = {}) {
   const url = Core.getPopupPageUrl(chrome.runtime.getURL('popup.html'));
   await chrome.tabs.create({ url });
-  if (Core.shouldClosePopupAfterOpen(window.location.search)) {
+  if (
+    options.keepPopupOpen !== true &&
+    Core.shouldClosePopupAfterOpen(window.location.search)
+  ) {
     window.close();
   }
 }
@@ -560,6 +676,34 @@ function updateActionFooterVisibility(activeTab) {
   const footer = document.getElementById('actionFooter');
   if (!footer) return;
   footer.style.display = activeTab === 'fill' ? 'flex' : 'none';
+}
+
+async function executeScriptInTab(tabId, func) {
+  if (chrome.scripting?.executeScript) {
+    const frames = await chrome.scripting.executeScript({
+      target: { tabId },
+      func,
+    });
+    return frames.flatMap((frame) =>
+      Array.isArray(frame.result) ? frame.result : [],
+    );
+  }
+  return new Promise((resolve, reject) => {
+    chrome.tabs.executeScript(
+      tabId,
+      { code: `(${func.toString()})()` },
+      (results) => {
+        const err = chrome.runtime.lastError;
+        if (err) reject(new Error(err.message));
+        else
+          resolve(
+            (results || []).flatMap((result) =>
+              Array.isArray(result) ? result : [],
+            ),
+          );
+      },
+    );
+  });
 }
 
 function initUpdatePanel() {
@@ -583,7 +727,9 @@ async function checkForUpdates() {
   checkBtn.disabled = true;
 
   try {
-    const res = await fetch(`${CHANGELOG_URL}?t=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetch(`${CHANGELOG_URL}?t=${Date.now()}`, {
+      cache: 'no-store',
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const changelog = await res.text();
     const latest = Core.getLatestVersionFromChangelog(changelog);
@@ -593,8 +739,7 @@ async function checkForUpdates() {
     const comparison = Core.compareVersions(current, latest);
     if (comparison < 0) {
       statusEl.className = 'update-status available';
-      statusEl.textContent =
-        `Có bản cập nhật mới ${latest}. Chạy ${UPDATE_COMMAND} trong thư mục extension, sau đó reload extension ở chrome://extensions.`;
+      statusEl.textContent = `Có bản cập nhật mới ${latest}. Chạy ${UPDATE_COMMAND} trong thư mục extension, sau đó reload extension ở chrome://extensions.`;
       actionsEl.classList.add('show');
     } else {
       statusEl.className = 'update-status current';
@@ -655,6 +800,8 @@ async function runFill() {
     defaultBreakTime: state.defaultBreak,
     defaultFinishTime: state.defaultFinish,
     defaultProject: '',
+    weekEnding: state.weekEnding || Core.getWeekEndingDate(),
+    autoPost: state.autoPost === true,
     days: [],
   };
 
@@ -678,6 +825,11 @@ async function runFill() {
     });
     if (result?.success) {
       showToast(`✓ ${result.message}`, 'success');
+    } else if (result?.postResult?.success === false) {
+      showToast(
+        result.postResult.message || 'Fill xong nhưng submit lỗi',
+        'error',
+      );
     } else {
       showToast(result?.message || 'Có lỗi xảy ra', 'error');
     }
@@ -701,7 +853,7 @@ async function clearForm() {
   Core.clearTasks(state, DAYS);
   await persistState();
   renderDays();
-  
+
   // Also clear on page
   try {
     const target = await findTimesheetTab();
@@ -711,7 +863,7 @@ async function clearForm() {
   } catch (e) {
     // Ignore if tab not connected
   }
-  
+
   showToast('Đã xoá form', 'info');
 }
 
@@ -813,22 +965,30 @@ async function searchProjectsFromPage() {
   container.innerHTML =
     '<div class="empty-presets" style="padding:8px 0;">Đang tìm...</div>';
   try {
-    const { tab } = await findTimesheetTab();
-    if (!tab?.id) throw new Error('Không có tab hiện tại');
-    const frames = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
+    let projects = [];
+    const bgResult = await chrome.runtime.sendMessage({
+      action: 'searchProjects',
+      keyword,
+      limit: 30,
+    });
+    if (bgResult?.success) {
+      projects = bgResult.projects || [];
+    } else {
+      if (bgResult?.debug)
+        console.warn('[Project Search] background debug', bgResult.debug);
+      const { tab } = await findTimesheetTab();
+      if (!tab?.id)
+        throw new Error(bgResult?.message || 'Không có dữ liệu project');
+      const sources = await executeScriptInTab(tab.id, () => {
         const scripts = Array.from(document.scripts).map(
           (script) => script.textContent || '',
         );
         scripts.push(document.documentElement.innerHTML || '');
         return scripts;
-      },
-    });
-    const sources = frames.flatMap((frame) =>
-      Array.isArray(frame.result) ? frame.result : [],
-    );
-    const projects = Core.searchProjectSources(sources, keyword);
+      });
+      projects = Core.searchProjectSources(sources, keyword);
+    }
+
     if (projects.length === 0) {
       container.innerHTML =
         '<div class="empty-presets" style="padding:8px 0;">Không tìm thấy project.</div>';
@@ -846,7 +1006,7 @@ async function searchProjectsFromPage() {
       .join('');
   } catch (e) {
     container.innerHTML = '';
-    showToast('Mở trang timesheet rồi tìm lại', 'error');
+    showToast(e.message || 'Không load được project data', 'error');
   }
 }
 
@@ -1015,67 +1175,6 @@ async function clearAllData() {
   showToast('Đã xoá toàn bộ dữ liệu', 'info');
 }
 
-// ── Connection check ──────────────────────────────────
-async function checkPageConnection() {
-  const dot = document.getElementById('statusDot');
-  const text = document.getElementById('statusText');
-
-  dot.className = 'status-dot';
-  text.textContent = 'Đang kiểm tra...';
-
-  let tab;
-  let baseUrl;
-  try {
-    const target = await findTimesheetTab();
-    tab = target.tab;
-    baseUrl = target.baseUrl;
-  } catch (e) {
-    text.textContent = 'Lỗi tab API';
-    return;
-  }
-
-  if (!tab || !tab.id) {
-    text.textContent = 'Không có tab';
-    return;
-  }
-
-  const tabUrl = tab.url || tab.pendingUrl || '';
-  if (!Core.isTimesheetUrl(tabUrl, baseUrl)) {
-    text.textContent = 'Mở trang timesheet';
-    return;
-  }
-
-  // Try inject content script first (handles case where page was open before ext loaded)
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['popup-core.js', 'content.js'],
-    });
-  } catch (e) {
-    // Already injected or no permission — ignore
-  }
-
-  // Small delay for script to init
-  await new Promise((r) => setTimeout(r, 200));
-
-  try {
-    const result = await chrome.tabs.sendMessage(tab.id, { action: 'ping' });
-    if (result?.alive) {
-      dot.className = 'status-dot connected';
-      text.textContent = 'Đã kết nối';
-    } else {
-      text.textContent = 'Không phản hồi';
-    }
-  } catch (e) {
-    if (tabUrl.startsWith(baseUrl)) {
-      // On the right page but script not responding — likely needs reload
-      text.textContent = 'Reload trang';
-    } else {
-      text.textContent = 'Mở trang timesheet';
-    }
-  }
-}
-
 // ── Toast ─────────────────────────────────────────────
 let toastTimeout;
 function showToast(msg, type = 'info') {
@@ -1086,4 +1185,362 @@ function showToast(msg, type = 'info') {
   toastTimeout = setTimeout(() => {
     el.classList.remove('show');
   }, 2800);
+}
+
+// ── Headless submit (không cần mở tab) ────────────────────────────
+async function runHeadlessSubmit() {
+  collectFromDOM();
+  await saveState();
+
+  const btn = document.getElementById('btnHeadlessSubmit');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Đang gửi...';
+
+  // Build config giống runFill
+  const config = {
+    defaultStartTime: state.defaultStart,
+    defaultBreakTime: state.defaultBreak,
+    defaultFinishTime: state.defaultFinish,
+    weekEnding: document.getElementById('weekEndingInput')?.value || '',
+    days: DAYS.filter(
+      (d) => state.days[d.code]?.enabled && state.days[d.code]?.tasks?.length,
+    ).map((d) => ({ dayCode: d.code, tasks: state.days[d.code].tasks })),
+  };
+
+  if (config.days.length === 0) {
+    showToast('Chưa có ngày nào được bật', 'info');
+    resetBtn();
+    return;
+  }
+
+  const result = await chrome.runtime.sendMessage({
+    action: 'submitTimesheetHeadless',
+    config,
+  });
+
+  if (result?.needLogin) {
+    if (result.debug) console.warn('[Submit Timesheet] debug', result.debug);
+    showToast(
+      result.message || 'Phiên đăng nhập không hợp lệ, hãy đăng nhập lại',
+      'error',
+    );
+  } else if (result?.success) {
+    showToast(result.message, 'success');
+    if (result.detailUrl) showSubmitSuccessPanel(result.detailUrl);
+  } else {
+    showToast(result?.message || 'Lỗi không xác định', 'error');
+  }
+
+  resetBtn();
+  function resetBtn() {
+    btn.disabled = false;
+    btn.innerHTML = '☁ Submit timesheet';
+  }
+}
+
+// ── Login panel ────────────────────────────────────────────────────
+function showSubmitSuccessPanel(detailUrl) {
+  lastSubmitDetailUrl = detailUrl || '';
+  document.getElementById('submitSuccessPanel')?.classList.add('show');
+}
+
+function hideSubmitSuccessPanel() {
+  document.getElementById('submitSuccessPanel')?.classList.remove('show');
+}
+
+async function openSubmitDetail() {
+  if (!lastSubmitDetailUrl) return;
+  await chrome.tabs.create({ url: lastSubmitDetailUrl });
+  hideSubmitSuccessPanel();
+}
+
+function showLoginPanel() {
+  document.getElementById('loginPanel').classList.add('show');
+}
+
+function hideLoginPanel() {
+  document.getElementById('loginPanel').classList.remove('show');
+}
+
+// ── Update login indicator UI ─────────────────────────────────────────────
+function updateLoginIndicator(loggedIn, displayName, expired = false) {
+  const indicator = document.getElementById('loginIndicator');
+  const logoutBtn = document.getElementById('btnLogout');
+  if (!indicator) return;
+
+  if (loggedIn) {
+    indicator.className = 'login-indicator logged-in';
+    indicator.textContent = `✓ ${displayName || 'User'}`;
+    if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+  } else if (expired) {
+    indicator.className = 'login-indicator expired';
+    indicator.textContent = 'Phiên hết hạn';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+  } else {
+    indicator.className = 'login-indicator';
+    indicator.textContent = 'Chưa đăng nhập';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+  }
+}
+
+async function checkLoginStatus() {
+  let result = { loggedIn: false };
+  try {
+    result = await chrome.runtime.sendMessage({ action: 'checkSession' });
+  } catch (e) {
+    result = { loggedIn: false };
+  }
+  const indicator = document.getElementById('loginIndicator');
+  const logoutBtn = document.getElementById('btnLogout');
+  const headlessBtn = document.getElementById('btnHeadlessSubmit');
+
+  const sessionName =
+    result?.session?.employeeName || result?.session?.employeeCode || '';
+  state.auth = {
+    loggedIn: result?.loggedIn === true,
+    username: result?.session?.employeeCode || state.auth?.username || '',
+    displayName:
+      sessionName || state.auth?.displayName || state.auth?.username || '',
+    lastLoginAt: result?.session?.loginAt || state.auth?.lastLoginAt || null,
+  };
+  await persistState();
+
+  if (state.auth.loggedIn) {
+    indicator.className = 'login-indicator logged-in';
+    indicator.textContent = `✓ ${state.auth.displayName || state.auth.username || 'User'}`;
+    if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+    if (headlessBtn) headlessBtn.disabled = false;
+  } else {
+    indicator.className = 'login-indicator';
+    indicator.textContent = 'Chưa đăng nhập';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (headlessBtn) headlessBtn.disabled = true;
+  }
+}
+
+async function doLogin() {
+  const mainUsername = document.getElementById('loginUsernameMain');
+  const mainPassword = document.getElementById('loginPasswordMain');
+  const panelUsername = document.getElementById('loginUsername');
+  const panelPassword = document.getElementById('loginPassword');
+  const baseUrl = (
+    document.getElementById('loginBaseUrl')?.value ||
+    state.settingUrl ||
+    ''
+  )
+    .trim()
+    .replace(/\/$/, '');
+  const username = (mainUsername?.value || panelUsername?.value || '').trim();
+  const password = mainPassword?.value || panelPassword?.value || '';
+  if (!baseUrl || !username || !password) {
+    setLoginError('Nhập URL, username và password');
+    showToast('Nhập URL, username và password', 'info');
+    return;
+  }
+
+  state.settingUrl = baseUrl;
+  setLoginError('');
+  const btn =
+    document.getElementById('btnLoginMain') ||
+    document.getElementById('btnDoLogin');
+  btn.disabled = true;
+  btn.textContent = 'Đang đăng nhập...';
+
+  try {
+    await chrome.runtime.sendMessage({ action: 'setBaseUrl', url: baseUrl });
+    let result = await chrome.runtime.sendMessage({
+      action: 'login',
+      username,
+      password,
+    });
+    if (!result?.success) {
+      result = await loginViaTimesheetTab(baseUrl, username, password);
+    }
+
+    if (result?.success) {
+      state.auth = {
+        loggedIn: true,
+        username: result.session?.employeeCode || username,
+        displayName:
+          result.session?.employeeName ||
+          result.session?.employeeCode ||
+          username,
+        lastLoginAt: Date.now(),
+      };
+      await persistState();
+      hideLoginPanel();
+      // Skip verifySession here — we just logged in, session is guaranteed valid.
+      // Directly update indicator and switch screen.
+      updateLoginIndicator(true, state.auth.displayName || state.auth.username);
+      renderAuthScreen();
+      showToast('Đăng nhập thành công ✓', 'success');
+      if (mainPassword) mainPassword.value = '';
+      if (panelPassword) panelPassword.value = '';
+    } else {
+      const message = formatLoginError(result);
+      setLoginError(message);
+      showToast(message, 'error');
+    }
+  } catch (e) {
+    setLoginError(e.message || 'Đăng nhập thất bại');
+    showToast(e.message || 'Đăng nhập thất bại', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Đăng nhập';
+  }
+}
+
+async function loginViaTimesheetTab(baseUrl, username, password) {
+  const loginUrl = `${baseUrl}/Admin/Pages/Login.aspx`;
+  let tab = Core.selectTimesheetTab(await queryTabs({}), baseUrl);
+  if (!tab?.id) {
+    tab = await createTab({ url: loginUrl, active: false });
+  } else if (!String(tab.url || '').includes('/Login.aspx')) {
+    tab = await updateTab(tab.id, { url: loginUrl, active: false });
+  }
+  if (!tab?.id) return { success: false, message: 'Không mở được tab login' };
+
+  await waitForTabComplete(tab.id);
+  try {
+    await injectContentScripts(tab.id);
+    return await chrome.tabs.sendMessage(tab.id, {
+      action: 'loginTimesheet',
+      credentials: { username, password },
+    });
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function queryTabs(queryInfo) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query(queryInfo, (tabs) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(tabs || []);
+    });
+  });
+}
+
+function createTab(createProperties) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.create(createProperties, (tab) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(tab);
+    });
+  });
+}
+
+function updateTab(tabId, updateProperties) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.update(tabId, updateProperties, (tab) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(tab);
+    });
+  });
+}
+
+function waitForTabComplete(tabId, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('Timeout chờ tab login load'));
+    }, timeout);
+    const listener = (updatedTabId, info) => {
+      if (updatedTabId === tabId && info.status === 'complete') {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) return;
+      if (tab?.status === 'complete') {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    });
+  });
+}
+
+async function injectContentScripts(tabId) {
+  if (chrome.scripting?.executeScript) {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['popup-core.js', 'content.js'],
+    });
+    return;
+  }
+  await new Promise((resolve, reject) => {
+    chrome.tabs.executeScript(tabId, { file: 'popup-core.js' }, () => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve();
+    });
+  });
+  await new Promise((resolve, reject) => {
+    chrome.tabs.executeScript(tabId, { file: 'content.js' }, () => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve();
+    });
+  });
+}
+
+function formatLoginError(result) {
+  const message = result?.message || 'Đăng nhập thất bại';
+  if (!result?.debug) return message;
+  const debug = result.debug;
+  const details = [
+    debug.getStatus ? `GET ${debug.getStatus}` : '',
+    debug.postStatus ? `POST ${debug.postStatus}` : '',
+    debug.hasViewstate === false ? 'thiếu VIEWSTATE' : '',
+    debug.hasCookieHeader === false ? 'không có Set-Cookie' : '',
+    debug.cookieNames?.length ? `cookies: ${debug.cookieNames.join(', ')}` : '',
+  ].filter(Boolean);
+  console.warn('[Timesheet Login] debug', debug);
+  return details.length ? `${message} (${details.join('; ')})` : message;
+}
+
+async function doLogout() {
+  await chrome.runtime.sendMessage({ action: 'logout' });
+  state.auth = { loggedIn: false, username: '', displayName: '' };
+  await persistState();
+  await checkLoginStatus();
+  renderAuthScreen();
+  showToast('Đã đăng xuất', 'info');
+}
+
+// Bind thêm vào bindGlobalEvents():
+function bindHeadlessEvents() {
+  document
+    .getElementById('btnHeadlessSubmit')
+    ?.addEventListener('click', runHeadlessSubmit);
+  document
+    .getElementById('btnHideLogin')
+    ?.addEventListener('click', hideLoginPanel);
+  document.getElementById('btnDoLogin')?.addEventListener('click', doLogin);
+  document.getElementById('btnLoginMain')?.addEventListener('click', doLogin);
+  document
+    .getElementById('btnCloseSubmitSuccess')
+    ?.addEventListener('click', hideSubmitSuccessPanel);
+  document
+    .getElementById('btnOpenSubmitDetail')
+    ?.addEventListener('click', openSubmitDetail);
+  document
+    .getElementById('btnLoginOpenTab')
+    ?.addEventListener('click', () => openInTab());
+  document.getElementById('btnLogout')?.addEventListener('click', doLogout);
+  document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doLogin();
+  });
+  document
+    .getElementById('loginPasswordMain')
+    ?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doLogin();
+    });
 }

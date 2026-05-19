@@ -34,6 +34,57 @@
     return new Promise((r) => setTimeout(r, ms));
   }
 
+  function firstVisible(selectors) {
+    for (const selector of selectors) {
+      const el = document.querySelector(selector);
+      if (el && window.getComputedStyle(el).display !== 'none') return el;
+    }
+    return null;
+  }
+
+  async function loginTimesheet({ username, password }) {
+    const userEl = firstVisible([
+      'input[name="txt_Username"]',
+      'input[id="txt_Username"]',
+      'input[name$="txtUsername"]',
+      'input[id$="txtUsername"]',
+      'input[name*="User"]',
+      'input[id*="User"]',
+      'input[type="text"]',
+    ]);
+    const passEl = firstVisible([
+      'input[name="txt_Password"]',
+      'input[id="txt_Password"]',
+      'input[name$="txtPassword"]',
+      'input[id$="txtPassword"]',
+      'input[type="password"]',
+    ]);
+    if (!userEl || !passEl) {
+      return { success: false, message: 'Không tìm thấy form login trên tab timesheet' };
+    }
+
+    setInputValue(userEl, username);
+    setInputValue(passEl, password);
+
+    const form = passEl.closest('form') || userEl.closest('form') || document.querySelector('form');
+    const controls = Array.from(document.querySelectorAll('input[type="submit"], button[type="submit"], input[type="button"], button'));
+    const submit =
+      controls.find((el) => /btn_Login|login|đăng nhập|sign in/i.test(`${el.name || ''} ${el.id || ''} ${el.value || ''} ${el.textContent || ''}`)) ||
+      controls.find((el) => el.type === 'submit');
+
+    if (submit) submit.click();
+    else if (form?.requestSubmit) form.requestSubmit();
+    else if (form) form.submit();
+    else return { success: false, message: 'Không tìm thấy nút submit login' };
+
+    await sleep(1500);
+    const stillHasPassword = !!document.querySelector('input[type="password"]');
+    return {
+      success: !stillHasPassword,
+      message: stillHasPassword ? 'Trang vẫn ở màn hình login sau khi submit' : 'Đã submit login trên tab',
+    };
+  }
+
   // ── Key insight: row index ≠ sequential number ─────────────────────────────
   // Server assigns newDayCount from DB — can be 0, 2, 3, 5...
   // So we must read actual row IDs from DOM, not assume 0,1,2...
@@ -135,13 +186,18 @@
     const finishTime = taskData.finishTime || defaults.defaultFinishTime || '';
 
     let filled = 0;
+    const row = document.getElementById(`tr${dayCode}_${suffix}`);
+    const rowInputs = row ? Array.from(row.querySelectorAll('input[type="text"], input:not([type]), textarea')) : [];
+    const findInRow = (re, fallback) => rowInputs.find((el) => re.test(el.name || el.id || '')) || fallback?.();
+    const fallbackTextInputs = () => row ? Array.from(row.querySelectorAll('input[type="text"], input:not([type])')) : [];
 
     // Project: monProject_0, monProject_2, ...
     if (project) {
-      const el = document.querySelector(`[name="${dayCode}Project_${suffix}"]`);
+      const el =
+        document.querySelector(`[name="${dayCode}Project_${suffix}"]`) ||
+        findInRow(/Project/i, () => fallbackTextInputs().find((input) => !/(Start|Break|Finish|Total|hdf)/i.test(input.name || input.id || '')));
       if (el) {
         setInputValue(el, project);
-        // Also fill _text hidden field used by actb autocomplete
         const textEl = document.querySelector(
           `[name="${dayCode}Project_${suffix}_text"]`,
         );
@@ -156,7 +212,9 @@
 
     // Task textarea: monTask0, monTask2, ... (NO underscore — confirmed from source)
     if (task) {
-      const el = document.querySelector(`[name="${dayCode}Task${suffix}"]`);
+      const el =
+        document.querySelector(`[name="${dayCode}Task${suffix}"]`) ||
+        findInRow(/Task/i, () => row?.querySelector('textarea'));
       if (el) {
         setInputValue(el, task);
         filled++;
@@ -167,15 +225,17 @@
     }
 
     // Time fields: monStart_0, monBreak_0, monFinish_0
-    const startEl = document.querySelector(
-      `[name="${dayCode}Start_${suffix}"]`,
-    );
-    const breakEl = document.querySelector(
-      `[name="${dayCode}Break_${suffix}"]`,
-    );
-    const finishEl = document.querySelector(
-      `[name="${dayCode}Finish_${suffix}"]`,
-    );
+    const textInputs = fallbackTextInputs();
+    const timeInputs = textInputs.filter((input) => !/Project|Task|Total|hdf/i.test(input.name || input.id || ''));
+    const startEl =
+      document.querySelector(`[name="${dayCode}Start_${suffix}"]`) ||
+      findInRow(/Start/i, () => timeInputs[0]);
+    const breakEl =
+      document.querySelector(`[name="${dayCode}Break_${suffix}"]`) ||
+      findInRow(/Break/i, () => timeInputs[1]);
+    const finishEl =
+      document.querySelector(`[name="${dayCode}Finish_${suffix}"]`) ||
+      findInRow(/Finish/i, () => timeInputs[2]);
 
     if (startTime && startEl) {
       setInputValue(startEl, startTime);
@@ -202,17 +262,48 @@
     return { success: filled > 0, filled, suffix };
   }
 
+  // ── Submit form ────────────────────────────────────────────────────────────
+
+  function isVisible(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+  }
+
+  async function postTimesheetForm() {
+    const controls = Array.from(
+      document.querySelectorAll('input[type="submit"], button[type="submit"], input[type="button"], button'),
+    );
+    const keywords = /submit|save|post|send|create|update|lưu|gửi|cập nhật/i;
+    const control =
+      controls.find((el) => isVisible(el) && el.type === 'submit') ||
+      controls.find((el) => {
+        const text = `${el.name || ''} ${el.id || ''} ${el.value || ''} ${el.textContent || ''}`;
+        return isVisible(el) && keywords.test(text);
+      });
+
+    if (control) {
+      control.click();
+      await sleep(500);
+      return { success: true, message: 'Đã submit timesheet' };
+    }
+
+    const form = document.querySelector('form');
+    if (!form) return { success: false, message: 'Không tìm thấy form để submit' };
+    if (form.requestSubmit) form.requestSubmit();
+    else form.submit();
+    await sleep(500);
+    return { success: true, message: 'Đã submit timesheet' };
+  }
+
   // ── Main fill ──────────────────────────────────────────────────────────────
 
   async function fillTimesheet(config) {
-    // Set Week Ending if not set or if we want to auto-calc
     const weekEndingEl = document.querySelector("[name$='txtWeekEnding']");
-    if (weekEndingEl && !weekEndingEl.value) {
-      const autoDate = (
-        window.TimesheetCore || TimesheetCore
-      ).getWeekEndingDate();
-      setInputValue(weekEndingEl, autoDate);
-      console.log('[AutoFill] Set Week Ending to:', autoDate);
+    if (weekEndingEl) {
+      const weekEnding = config.weekEnding || (window.TimesheetCore || TimesheetCore).getWeekEndingDate();
+      setInputValue(weekEndingEl, weekEnding);
+      console.log('[AutoFill] Set Week Ending to:', weekEnding);
     }
 
     let totalSuccess = 0,
@@ -256,12 +347,20 @@
       }
     }
 
+    let postResult = null;
+    if (config.autoPost && totalFailed === 0) {
+      postResult = await postTimesheetForm();
+    }
+
     return {
-      success: totalFailed === 0,
+      success: totalFailed === 0 && (!config.autoPost || postResult?.success === true),
       totalSuccess,
       totalFailed,
       results,
-      message: `${totalSuccess} row(s) filled${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`,
+      postResult,
+      message: postResult?.success
+        ? `${totalSuccess} row(s) filled and submitted`
+        : `${totalSuccess} row(s) filled${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`,
     };
   }
 
@@ -302,12 +401,20 @@
     fillRow,
     fillTimesheet,
     getExistingRowSuffixes,
+    loginTimesheet,
+    postTimesheetForm,
     searchProjectsOnPage,
     setInputValue,
   };
 
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
+      if (req.action === 'loginTimesheet') {
+        loginTimesheet(req.credentials || {})
+          .then(sendResponse)
+          .catch((e) => sendResponse({ success: false, message: e.message }));
+        return true;
+      }
       if (req.action === 'fillTimesheet') {
         fillTimesheet(req.config)
           .then(sendResponse)
@@ -316,10 +423,6 @@
       }
       if (req.action === 'clearForm') {
         clearFormOnPage().then(sendResponse);
-        return true;
-      }
-      if (req.action === 'ping') {
-        sendResponse({ alive: true, url: location.href });
         return true;
       }
       if (req.action === 'searchProjects') {
