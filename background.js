@@ -221,31 +221,36 @@ async function fetchTimesheetPage(cookieStr, weekEnding) {
   return { html, meta };
 }
 
+function encodePayloadValue(value) {
+  return encodeURIComponent(String(value ?? ''));
+}
+
 // ── Build submit payload ───────────────────────────────────────────────────
 
 function buildSubmitPayload(meta, config, weekEnding) {
   const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   const params = new URLSearchParams();
+  const setParam = (key, value) => params.set(key, encodePayloadValue(value));
 
   // Core fields
-  params.set('action', 'updateTimeSheet');
-  if (meta.timesheetId) params.set('id', meta.timesheetId);
+  setParam('action', 'updateTimeSheet');
+  if (meta.timesheetId) setParam('id', meta.timesheetId);
 
-  params.set('ctl00$ContentPlaceHolder1$hdfId', meta.timesheetId || '');
-  params.set('ctl00$ContentPlaceHolder1$hdfStatus', '');
-  params.set('ctl00$ContentPlaceHolder1$hdfObjectId', '');
-  params.set('ctl00$ContentPlaceHolder1$txtWeekEnding', weekEnding);
-  params.set('ctl00$ContentPlaceHolder1$hdfEmployeeId', meta.employeeId || '');
-  params.set(
+  setParam('ctl00$ContentPlaceHolder1$hdfId', meta.timesheetId || '');
+  setParam('ctl00$ContentPlaceHolder1$hdfStatus', '');
+  setParam('ctl00$ContentPlaceHolder1$hdfObjectId', '');
+  setParam('ctl00$ContentPlaceHolder1$txtWeekEnding', weekEnding);
+  setParam('ctl00$ContentPlaceHolder1$hdfEmployeeId', meta.employeeId || '');
+  setParam(
     'ctl00$ContentPlaceHolder1$hdfEmployeeName',
     meta.employeeName || '',
   );
-  params.set(
+  setParam(
     'ctl00$ContentPlaceHolder1$hdfEmployeeCode',
     meta.employeeCode || '',
   );
-  params.set(
+  setParam(
     'ctl00$ContentPlaceHolder1$hdfdateSubmitted',
     meta.dateSubmitted || '',
   );
@@ -260,8 +265,16 @@ function buildSubmitPayload(meta, config, weekEnding) {
 
   DAYS.forEach((day) => {
     const tasks = dayTasksMap[day] || [];
-    const records = meta.dayRecordIds?.[day] || [0]; // fallback to [0]
-    const count = records.length;
+    const existingRecords = meta.dayRecordIds?.[day] || [];
+    const rowCount = Math.max(
+      existingRecords.length,
+      tasks.length > 0 ? tasks.length : 1,
+    );
+    const records = Array.from(
+      { length: rowCount },
+      (_, i) => existingRecords[i] || 0,
+    );
+    const suffixes = records.map((_, i) => i);
 
     // Calculate total hours for the day
     let dayTotalMinutes = 0;
@@ -278,18 +291,11 @@ function buildSubmitPayload(meta, config, weekEnding) {
 
     const dayTotal = formatMinutes(dayTotalMinutes);
 
-    params.set(
-      `ctl00$ContentPlaceHolder1$hdf${day}`,
-      records.map((_, i) => i).join(',') + '*',
-    );
-    params.set(`ctl00$ContentPlaceHolder1$hdfTotal_${day}`, dayTotal);
+    setParam(`ctl00$ContentPlaceHolder1$hdf${day}`, suffixes.map((suffix) => `${suffix}*`).join(''));
+    setParam(`ctl00$ContentPlaceHolder1$hdfTotal_${day}`, dayTotal);
 
     // Each row
-    for (
-      let i = 0;
-      i < Math.max(count, tasks.length > 0 ? tasks.length : 1);
-      i++
-    ) {
+    for (let i = 0; i < rowCount; i++) {
       const task = tasks[i] || {};
       const recId = records[i] ?? 0;
       const suffix = i; // use sequential for new timesheets; server maps by recId
@@ -311,24 +317,21 @@ function buildSubmitPayload(meta, config, weekEnding) {
         rowMins = Math.max(0, f - s - b);
       const rowTotal = rowMins > 0 ? ` ${formatMinutes(rowMins)}` : '';
 
-      params.set(`${day}Project_${suffix}`, project);
-      params.set(`${day}Start_${suffix}`, startTime);
-      params.set(`${day}Break_${suffix}`, breakTime);
-      params.set(`${day}Finish_${suffix}`, finishTime);
-      params.set(`hdfTotal${day}_${suffix}`, rowTotal);
-      params.set(`hdf${day}_${suffix}`, String(recId));
+      setParam(`${day}Project_${suffix}`, project);
+      setParam(`${day}Start_${suffix}`, startTime);
+      setParam(`${day}Break_${suffix}`, breakTime);
+      setParam(`${day}Finish_${suffix}`, finishTime);
+      setParam(`hdfTotal${day}_${suffix}`, rowTotal);
+      setParam(`hdf${day}_${suffix}`, String(recId));
     }
 
     // Note: hdfwedcount vs hdfwedCount (lowercase 'c' for wed — confirmed from HAR!)
     const countKey = day === 'wed' ? `hdf${day}count` : `hdf${day}Count`;
-    params.set(
-      countKey,
-      String(Math.max(count, tasks.length > 0 ? tasks.length : 1)),
-    );
+    setParam(countKey, String(rowCount));
   });
 
   // Grand total
-  params.set(
+  setParam(
     'ctl00$ContentPlaceHolder1$hdftotal',
     formatMinutes(grandTotalMinutes),
   );
@@ -340,35 +343,415 @@ function buildSubmitPayload(meta, config, weekEnding) {
       let i = 0;
       i <
       Math.max(
-        (meta.dayRecordIds?.[day] || [0]).length,
+        (meta.dayRecordIds?.[day] || []).length,
         tasks.length > 0 ? tasks.length : 1,
       );
       i++
     ) {
-      params.set(`${day}Task${i}`, tasks[i]?.task || '\n');
+      setParam(`${day}Task${i}`, tasks[i]?.task || '\n');
     }
   });
 
   return params;
 }
 
-// ── Submit timesheet ───────────────────────────────────────────────────────
+// ── Fetch timesheet record ID for a given weekEnding ──────────────────────
+// Flow:
+//   1. GET MyTimeSheetList.aspx filtered by weekEnding week
+//   2. Find records matching weekEnding exactly
+//   3. Prefer record with totalHrs > 0; fallback to latest (first row)
+//   4. Return record id, or null if none found (→ create new)
 
-async function submitTimesheet(config) {
-  const cookieSession = await loadSessionFromBrowserCookies();
-  const session = cookieSession || (await loadSession());
+async function fetchTimesheetRecord(cookieStr, weekEnding) {
+  // weekEnding: DD/MM/YYYY  e.g. "25/05/2026"
+  const [dd, mm, yyyy] = weekEnding.split('/').map(Number);
+  const endDate = new Date(yyyy, mm - 1, dd);
+  const startDate = new Date(endDate);
+  startDate.setDate(endDate.getDate() - 6);
+
+  const fmt = (d) =>
+    `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+  const fromStr = fmt(startDate);
+  const toStr = fmt(endDate);
+
+  console.log(
+    `[BG] fetchTimesheetRecord: weekEnding=${weekEnding} range=${fromStr}→${toStr}`,
+  );
+
+  const listUrl = `${BASE_URL()}/Admin/Pages/TimeSheetOnline/MyTimeSheetList.aspx`;
+
+  // ── Step 1: GET the list page to obtain valid __EVENTVALIDATION token ──
+  let getHtml = '';
+  try {
+    const getRes = await fetch(listUrl, {
+      method: 'GET',
+      credentials: 'include',
+      headers: buildHeaders(cookieStr),
+    });
+    getHtml = await getRes.text();
+  } catch (e) {
+    console.error('[BG] fetchTimesheetRecord GET error:', e.message);
+    return null;
+  }
+
+  // Extract tokens from the GET response
+  const eventValidation = extractInput(getHtml, '__EVENTVALIDATION') || '';
+  const viewState = extractInput(getHtml, '__VIEWSTATE') || '';
+  const vsKey = extractInput(getHtml, 'vsKey') || '33';
+
+  console.log(
+    `[BG] tokens: vsKey=${vsKey} eventValidation=${eventValidation.slice(0, 30)}...`,
+  );
+
+  // ── Step 2: POST with real tokens and date filter ─────────────────────
+  const params = new URLSearchParams({
+    __EVENTTARGET: '',
+    __EVENTARGUMENT: '',
+    __LASTFOCUS: '',
+    vsKey: vsKey,
+    __VIEWSTATE: viewState,
+    __EVENTVALIDATION: eventValidation,
+    ctl00$AccountInfo1$ddl_Language: 'vi-VN',
+    ctl00$ContentPlaceHolder1$txtWeekEndingFrom: fromStr,
+    ctl00$ContentPlaceHolder1$txtWeekEndingTo: toStr,
+    ctl00$ContentPlaceHolder1$btn_Submit: '',
+    ctl00$ContentPlaceHolder1$UcPageList1$hdf_PageSize: '20',
+    ctl00$ContentPlaceHolder1$UcPageList1$hdf_PageNumber: '1',
+    ctl00$ContentPlaceHolder1$UcPageList1$DropDownList_Pages: '1',
+  });
+
+  let html = '';
+  try {
+    const res = await fetch(listUrl, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        ...buildHeaders(cookieStr),
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        Referer: listUrl,
+      },
+      body: params.toString(),
+    });
+    html = await res.text();
+  } catch (e) {
+    console.error('[BG] fetchTimesheetRecord POST error:', e.message);
+    return null;
+  }
+
+  // Parse rows from the list HTML
+  // Table columns: Week Ending | Employer Code | Employee Name | Date Submitted | Total Hrs
+  // Row structure per spec:
+  //   <td><a href='MyTimeSheetDetail.aspx?id=354102'>24/05/2026</a></td>
+  //   <td>tuannha</td>
+  //   <td>Nguyen Hoang Anh Tuan</td>
+  //   <td>11:31:SA, 19/05/2026</td>   ← dateSubmitted
+  //   <td>00:00</td>                   ← totalHrs
+
+  const rowRegex =
+    /<tr[^>]*>\s*<td>\s*<a href='MyTimeSheetDetail\.aspx\?id=(\d+)'>\s*([\d\/]+)\s*<\/a>\s*<\/td>\s*<td>[^<]*<\/td>\s*<td>[^<]*<\/td>\s*<td>\s*([^<]+?)\s*<\/td>\s*<td>\s*([\d:]+)\s*<\/td>/gi;
+
+  const records = [];
+  let match;
+  while ((match = rowRegex.exec(html)) !== null) {
+    const id = match[1];
+    const weekEnd = match[2].trim(); // DD/MM/YYYY
+    const dateSubmitted = match[3].trim(); // e.g. "11:31:SA, 19/05/2026"
+    const totalHrs = match[4].trim(); // HH:MM
+
+    records.push({ id, weekEnd, dateSubmitted, totalHrs });
+    console.log(
+      `[BG] Found record: id=${id} weekEnd=${weekEnd} dateSubmitted=${dateSubmitted} totalHrs=${totalHrs}`,
+    );
+  }
+
+  if (records.length === 0) {
+    console.log('[BG] No records found → will create new');
+    return null;
+  }
+
+  // Filter to records matching exactly our weekEnding
+  const matching = records.filter((r) => r.weekEnd === weekEnding);
+  console.log(`[BG] Matching weekEnding="${weekEnding}":`, matching);
+
+  if (matching.length === 0) {
+    console.log('[BG] No matching weekEnding → will create new');
+    return null;
+  }
+
+  // Parse dateSubmitted "11:31:SA, 19/05/2026" → Date object for sorting
+  // Format: HH:MM:AM/PM, DD/MM/YYYY  (SA=AM, CH=PM in Vietnamese)
+  function parseDateSubmitted(ds) {
+    try {
+      const m = ds.match(/(\d+):(\d+):(SA|CH),\s*(\d+)\/(\d+)\/(\d+)/i);
+      if (!m) return new Date(0);
+      let [, hh, min, ampm, dd, mo, yyyy] = m;
+      hh = parseInt(hh, 10);
+      if (ampm.toUpperCase() === 'CH' && hh < 12) hh += 12;
+      if (ampm.toUpperCase() === 'SA' && hh === 12) hh = 0;
+      return new Date(
+        parseInt(yyyy),
+        parseInt(mo) - 1,
+        parseInt(dd),
+        hh,
+        parseInt(min),
+      );
+    } catch {
+      return new Date(0);
+    }
+  }
+
+  const parseHrs = (hhmm) => {
+    const [h, m] = (hhmm || '0:0').split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  // Sort by dateSubmitted descending (newest first)
+  const sorted = [...matching].sort(
+    (a, b) =>
+      parseDateSubmitted(b.dateSubmitted) - parseDateSubmitted(a.dateSubmitted),
+  );
+
+  console.log(
+    '[BG] Sorted by dateSubmitted (newest first):',
+    sorted.map((r) => `id=${r.id} date=${r.dateSubmitted} hrs=${r.totalHrs}`),
+  );
+
+  // Prefer newest record with totalHrs > 0; fallback to newest overall
+  const withHours = sorted.filter((r) => parseHrs(r.totalHrs) > 0);
+  const chosen = withHours.length > 0 ? withHours[0] : sorted[0];
+
+  console.log(
+    `[BG] Chosen: id=${chosen.id} dateSubmitted=${chosen.dateSubmitted} totalHrs=${chosen.totalHrs}`,
+  );
+  return chosen;
+}
+
+async function loadExistingTimesheet(weekEnding) {
+  const session = await loadSession();
   if (!session?.cookies) {
     return { success: false, needLogin: true, message: 'Chưa đăng nhập' };
   }
 
-  // Get week ending (Sunday of current week in DD/MM/YYYY)
+  const record = await fetchTimesheetRecord(session.cookies, weekEnding);
+  if (!record?.id) {
+    return {
+      success: true,
+      found: false,
+      message: 'Không tìm thấy timesheet đã submit',
+    };
+  }
+
+  const detailUrl = `${BASE_URL()}/Admin/Pages/TimeSheetOnline/MyTimeSheetDetail.aspx?id=${encodeURIComponent(record.id)}`;
+  const res = await fetch(detailUrl, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      ...buildHeaders(session.cookies),
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      Referer: `${BASE_URL()}/Admin/Pages/TimeSheetOnline/MyTimeSheetList.aspx`,
+    },
+    redirect: 'manual',
+  });
+  const html = await res.text();
+  if (
+    res.status === 302 ||
+    /Login\.aspx|txt_Username|txt_Password/i.test(html)
+  ) {
+    return {
+      success: false,
+      needLogin: true,
+      message: 'Server yêu cầu đăng nhập lại',
+    };
+  }
+  if (!res.ok) {
+    return {
+      success: false,
+      message: `Không đọc được detail timesheet: HTTP ${res.status}`,
+    };
+  }
+
+  const days = parseTimesheetDetailTasks(html);
+  const taskCount = Object.values(days).reduce(
+    (sum, tasks) => sum + tasks.length,
+    0,
+  );
+  console.warn('[Timesheet Detail Debug] Loaded existing timesheet detail', {
+    record,
+    detailUrl,
+    taskCount,
+    days,
+  });
+  return {
+    success: true,
+    found: true,
+    record,
+    detailUrl,
+    weekEnding,
+    days,
+    taskCount,
+    hasData: taskCount > 0,
+  };
+}
+
+function parseTimesheetDetailTasks(html) {
+  const mapping = {
+    Monday: 'mon',
+    Tuesday: 'tue',
+    Wednesday: 'wed',
+    Thursday: 'thu',
+    Friday: 'fri',
+    Saturday: 'sat',
+    Sunday: 'sun',
+  };
+  const result = {
+    mon: [],
+    tue: [],
+    wed: [],
+    thu: [],
+    fri: [],
+    sat: [],
+    sun: [],
+  };
+  for (const [dayName, dayCode] of Object.entries(mapping)) {
+    const table = extractTableById(html, `tbl_${dayName}`);
+    if (!table) continue;
+    const rowRe =
+      /<tr\b[^>]*id=['"]tr(?:mon|tue|wed|thu|fri|sat|sun)_\d+['"][^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    while ((rowMatch = rowRe.exec(table)) !== null) {
+      const cells = extractTableCells(rowMatch[1]).map(stripHtml);
+      if (cells.length < 5) continue;
+      result[dayCode].push({
+        project: cells[0] || '',
+        task: cells[1] || '',
+        startTime: normalizeDetailTime(cells[2]),
+        breakTime: normalizeDetailTime(cells[3]),
+        finishTime: normalizeDetailTime(cells[4]),
+        workHours: '',
+      });
+    }
+  }
+  return result;
+}
+
+function extractTableCells(row) {
+  const cells = [];
+  const re = /<td\b[^>]*>([\s\S]*?)<\/td>/gi;
+  let match;
+  while ((match = re.exec(row || '')) !== null) cells.push(match[1]);
+  return cells;
+}
+
+function extractTableById(html, id) {
+  const markerRe = new RegExp(`<table\\b[^>]*id=["']${id}["'][^>]*>`, 'i');
+  const marker = markerRe.exec(html || '');
+  if (!marker) return '';
+  const start = marker.index;
+  let depth = 0;
+  const tagRe = /<\/?table\b[^>]*>/gi;
+  tagRe.lastIndex = start;
+  let match;
+  while ((match = tagRe.exec(html)) !== null) {
+    if (match[0][1] === '/') depth--;
+    else depth++;
+    if (depth === 0) return html.slice(start, tagRe.lastIndex);
+  }
+  return '';
+}
+
+function normalizeDetailTime(value) {
+  const match = String(value || '').match(/\b(\d{1,2}):(\d{2})\b/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '';
+}
+
+
+async function ensureServerRows(session, meta, config) {
+  let changed = false;
+  for (const { dayCode, tasks } of config.days || []) {
+    const needed = tasks?.length || 0;
+    if (needed <= 0) continue;
+    const current = meta.dayRecordIds?.[dayCode]?.length || 0;
+    for (let dayCount = current; dayCount < needed; dayCount++) {
+      const result = await addTimesheetRow(dayCode, {
+        session,
+        timesheetId: meta.timesheetId,
+        dayCount,
+      });
+      if (!result?.success) {
+        throw new Error(result?.message || `Không tạo được row ${dayCode} #${dayCount + 1}`);
+      }
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+async function fetchEditMeta(session, timesheetId) {
+  const editUrl = timesheetId
+    ? `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx?id=${encodeURIComponent(timesheetId)}`
+    : `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx`;
+
+  console.log(`[BG] Loading edit page: ${editUrl}`);
+
+  const res = await fetch(editUrl, {
+    method: 'GET',
+    credentials: 'include',
+    headers: buildHeaders(session.cookies),
+  });
+  const html = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (/Login\.aspx|txt_Username|txt_Password/i.test(html)) {
+    throw new Error('Server trả về trang login, cookie không còn hợp lệ');
+  }
+
+  return {
+    timesheetId: timesheetId || extractHiddenValue(html, 'hdfId') || '',
+    employeeId: extractHiddenValue(html, 'hdfEmployeeId'),
+    employeeName: extractHiddenValue(html, 'hdfEmployeeName'),
+    employeeCode: extractHiddenValue(html, 'hdfEmployeeCode'),
+    dateSubmitted: extractHiddenValue(html, 'hdfdateSubmitted') || '',
+    dayRecordIds: parseDayRecordIds(html),
+    dayCounts: parseDayCounts(html),
+    ...session,
+  };
+}
+
+// ── Submit timesheet ───────────────────────────────────────────────────────
+
+async function submitTimesheet(config) {
+  const session = await loadSession();
+  if (!session?.cookies) {
+    return { success: false, needLogin: true, message: 'Chưa đăng nhập' };
+  }
+
   const weekEnding = config.weekEnding || getWeekEnding();
 
-  // Fetch current timesheet page to get record IDs
+  // ── Step 1: Find existing record for this weekEnding ──────────────────
+  let existingRecord = null;
+  try {
+    existingRecord = await fetchTimesheetRecord(session.cookies, weekEnding);
+  } catch (e) {
+    console.warn(
+      '[BG] fetchTimesheetRecord failed, will create new:',
+      e.message,
+    );
+  }
+
+  // ── Step 2: Fetch the edit page (new or existing) ─────────────────────
   let meta;
   try {
-    const page = await fetchTimesheetPage(session.cookies, weekEnding);
-    meta = { ...page.meta, ...session };
+    meta = await fetchEditMeta(session, existingRecord?.id || '');
+    const addedRows = await ensureServerRows(session, meta, config);
+    if (addedRows) {
+      meta = await fetchEditMeta(session, meta.timesheetId || existingRecord?.id || '');
+    }
+
+    console.log('[BG] meta:', {
+      timesheetId: meta.timesheetId,
+      employeeCode: meta.employeeCode,
+      dayRecordIds: meta.dayRecordIds,
+    });
   } catch (e) {
     _session = null;
     await chrome.storage.local.remove('timesheetSession');
@@ -382,8 +765,32 @@ async function submitTimesheet(config) {
   // Build payload
   const payload = buildSubmitPayload(meta, config, weekEnding);
 
-  // POST to server
-  const url = `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx`;
+  // ── DEBUG: Log payload và tạm dừng — UNCOMMENT đoạn fetch bên dưới khi test OK ──
+  console.log('[BG] ══════════ DEBUG SUBMIT ══════════');
+  console.log('[BG] weekEnding   :', weekEnding);
+  console.log('[BG] existingRecord:', existingRecord);
+  console.log('[BG] timesheetId  :', meta.timesheetId);
+  console.log('[BG] payload entries:');
+  for (const [k, v] of payload.entries()) {
+    console.log(`  ${k} = ${v}`);
+  }
+  console.log('[BG] ════════════════════════════════');
+
+  // ── TODO: Uncomment block này khi debug xong ──────────────────────────
+  // return {
+  //   success: false,
+  //   debug: true,
+  //   message:
+  //     '[DEBUG] Payload đã log ra console — kiểm tra rồi uncomment phần POST trong background.js',
+  //   timesheetId: meta.timesheetId,
+  //   weekEnding,
+  //   existingRecord,
+  // };
+  // ── END TODO ──────────────────────────────────────────────────────────
+
+  const url = meta.timesheetId
+    ? `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx?id=${encodeURIComponent(meta.timesheetId)}`
+    : `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx`;
   let res;
   try {
     res = await fetch(url, {
@@ -405,18 +812,18 @@ async function submitTimesheet(config) {
 
   const text = await res.text();
 
-  // Server returns: {success:true,message:'Object đã được cập nhật thành công'}
   if (text.includes('success:true') || text.includes('"success":true')) {
     return {
       success: true,
-      message: 'Đã lưu timesheet thành công ✓',
+      message: meta.timesheetId
+        ? 'Đã cập nhật timesheet thành công ✓'
+        : 'Đã tạo timesheet thành công ✓',
       detailUrl: meta.timesheetId
         ? `${BASE_URL()}/Admin/Pages/TimeSheetOnline/MyTimeSheetDetail.aspx?id=${meta.timesheetId}`
         : '',
     };
   }
 
-  // Session expired → redirect to login page
   if (
     res.status === 302 ||
     /Login\.aspx|txt_Username|txt_Password|btn_Login/i.test(text)
@@ -441,22 +848,24 @@ async function submitTimesheet(config) {
 // ── addTimeSheetRecord headless ────────────────────────────────────────────
 // For multi-task: call server to create a new row, get back newDayCount + recId
 
-async function addTimesheetRow(dayCode) {
-  const session = await loadSession();
+async function addTimesheetRow(dayCode, options = {}) {
+  const session = options.session || (await loadSession());
   if (!session?.cookies) return { success: false, needLogin: true };
 
-  const url = `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx`;
+  const url = options.timesheetId
+    ? `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx?id=${encodeURIComponent(options.timesheetId)}`
+    : `${BASE_URL()}/Admin/Pages/TimeSheetOnline/TimeSheetEdit.aspx`;
   const params = new URLSearchParams({
     action: 'addTimeSheetRecord',
     dayCode,
-    id: `'tbl_${capitalize(dayCode)}'`, // matches page JS: args.id
-    dayCount: '0', // server will return actual newDayCount
+    id: `'tbl_${capitalize(dayCode)}'`,
+    dayCount: String(options.dayCount ?? 0),
     recIdList: `ctl00_ContentPlaceHolder1_hdf${dayCode}`,
   });
 
   const res = await fetch(url, {
     method: 'POST',
-    credentials: 'omit',
+    credentials: 'include',
     headers: {
       ...buildHeaders(session.cookies),
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -825,6 +1234,13 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
     verifySession()
       .then(sendResponse)
       .catch((e) => sendResponse({ loggedIn: false, message: e.message }));
+    return true;
+  }
+
+  if (req.action === 'loadExistingTimesheet') {
+    loadExistingTimesheet(req.weekEnding)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ success: false, message: e.message }));
     return true;
   }
 

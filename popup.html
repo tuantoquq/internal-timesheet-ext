@@ -1222,6 +1222,104 @@
         width: 100%;
         max-width: 360px;
       }
+
+      /* ── Loading screen ── */
+      #loadingScreen {
+        position: fixed;
+        inset: 0;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        z-index: 9999;
+        transition: opacity 0.25s ease;
+      }
+      #loadingScreen.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #loadingScreen.hidden {
+        display: none;
+      }
+
+      #timesheetLoadOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.38);
+        backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+      }
+      #timesheetLoadOverlay.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .timesheet-load-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 20px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.78);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+      }
+      .loading-logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      }
+      .loading-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .loading-dots {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .loading-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        opacity: 0.3;
+        animation: dotPulse 1.2s ease-in-out infinite;
+      }
+      .loading-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .loading-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes dotPulse {
+        0%,
+        80%,
+        100% {
+          opacity: 0.3;
+          transform: scale(0.85);
+        }
+        40% {
+          opacity: 1;
+          transform: scale(1.1);
+        }
+      }
+      .loading-text {
+        font-size: 11px;
+        color: var(--text-3);
+        letter-spacing: 0.3px;
+      }
     </style>
   </head>
   <body>
@@ -1277,7 +1375,37 @@
       </div>
     </div>
 
+    <div id="loadingScreen">
+      <div class="loading-logo">
+        <img src="icons/icon48.png" alt="Timesheet AutoFill" />
+      </div>
+      <div class="loading-dots">
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+      </div>
+      <span class="loading-text" id="loadingText"
+        >Đang kiểm tra phiên đăng nhập...</span
+      >
+    </div>
+
     <div id="appScreen" class="screen-hidden">
+      <div id="timesheetLoadOverlay" aria-live="polite">
+        <div class="timesheet-load-card">
+          <div class="loading-logo">
+            <img src="icons/icon48.png" alt="Timesheet AutoFill" />
+          </div>
+          <div class="loading-dots">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+          </div>
+          <span class="loading-text" id="timesheetLoadText"
+            >Đang tải dữ liệu timesheet...</span
+          >
+        </div>
+      </div>
+
       <!-- Header -->
       <div class="header">
         <div class="header-left">
@@ -1384,8 +1512,14 @@
                   type="date"
                   class="time-input"
                   id="weekEndingPicker"
-                  title="Chọn Week Ending"
-                  style="width: 44px; padding: 6px; color-scheme: dark"
+                  title="Chọn ngày Chủ nhật (Week Ending)"
+                  style="
+                    width: 32px;
+                    padding: 5px 4px;
+                    color-scheme: dark;
+                    color: transparent;
+                    cursor: pointer;
+                  "
                 />
               </div>
             </div>
@@ -1618,7 +1752,7 @@
           disabled
           title="Submit timesheet không cần mở tab"
         >
-          Submit timesheet
+          ☁ Submit timesheet
         </button>
       </div>
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.1] - 2026-05-19
+
+### Added
+
+- Tự động tìm timesheet record đã tồn tại theo Week Ending trước khi submit để cập nhật record cũ thay vì tạo trùng.
+- Load dữ liệu từ timesheet detail hiện có vào form extension khi chọn Week Ending đã có record.
+- Loading overlay bán trong suốt khi extension đang tải dữ liệu timesheet detail.
+
+### Fixed
+
+- Sửa submit nhiều task trong cùng một ngày cho headless flow: tạo đủ server rows trước khi update và gửi đúng `hdf<day>` row list.
+- Match payload update của hệ thống timesheet với double-encoded values và định dạng row suffix `0*1*`.
+- Reset form khi đổi Week Ending nếu không tìm thấy timesheet tương ứng, tránh giữ dữ liệu của tuần trước.
+- Sửa loading screen ban đầu bị ẩn do nằm trong `appScreen` đang `screen-hidden`.
+
+---
+
 ## [1.1.0] - 2026-05-19
 
 ### Added

@@ -66,16 +66,61 @@ const UPDATE_COMMAND = 'update.bat';
 let lastSubmitDetailUrl = '';
 
 // ── Init ──────────────────────────────────────────────
+// ── Loading screen helpers ────────────────────────────────────────────────
+function showLoadingScreen(text) {
+  const el = document.getElementById('loadingScreen');
+  const textEl = document.getElementById('loadingText');
+  if (!el) return;
+  if (textEl && text) textEl.textContent = text;
+  el.classList.remove('fade-out', 'hidden');
+}
+
+function hideLoadingScreen() {
+  const el = document.getElementById('loadingScreen');
+  if (!el) return;
+  el.classList.add('fade-out');
+  setTimeout(() => el.classList.add('hidden'), 280);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   applyViewMode();
   renderManifestVersion();
+
+  // Show loading screen immediately
+  showLoadingScreen('Đang kiểm tra phiên đăng nhập...');
+
   await loadState();
   applyTheme(state.themeColor || 'cyan');
   applyThemeMode(state.themeMode || 'dark');
   bindGlobalEvents();
   bindHeadlessEvents();
-  await checkLoginStatus();
-  renderAuthScreen();
+
+  // Fast path: read cached session from storage (~instant, no network)
+  const cached = await new Promise((r) =>
+    chrome.runtime.sendMessage({ action: 'checkSession' }, r),
+  ).catch(() => ({ loggedIn: false }));
+
+  if (cached?.loggedIn) {
+    // Has cached session → show app screen immediately, verify in background
+    state.auth = {
+      loggedIn: true,
+      username: cached.session?.employeeCode || state.auth?.username || '',
+      displayName:
+        cached.session?.employeeName ||
+        cached.session?.employeeCode ||
+        state.auth?.displayName ||
+        '',
+      lastLoginAt: cached.session?.loginAt || null,
+    };
+    renderAuthScreen();
+    hideLoadingScreen();
+    // Verify with server silently — only updates indicator or shows expired toast
+    checkLoginStatus();
+  } else {
+    // No session → go straight to login
+    renderAuthScreen();
+    hideLoadingScreen();
+  }
 });
 
 function renderManifestVersion() {
@@ -203,6 +248,7 @@ function renderAuthScreen() {
     renderPresetTab();
     updateActionFooterVisibility('fill');
     initUpdatePanel();
+    scheduleLoadExistingTimesheet();
   } else {
     appScreen?.classList.add('screen-hidden');
     loginScreen?.classList.remove('screen-hidden');
@@ -236,6 +282,105 @@ function syncWeekEndingInputs(source) {
     picker.value = displayToDate(textInput.value) || '';
   }
   state.weekEnding = textInput.value.trim() || Core.getWeekEndingDate();
+}
+
+
+let lastLoadedWeekEnding = '';
+let loadExistingTimer = null;
+
+function scheduleLoadExistingTimesheet() {
+  clearTimeout(loadExistingTimer);
+  loadExistingTimer = setTimeout(() => loadExistingTimesheetIntoForm(), 250);
+}
+
+
+function showTimesheetLoadOverlay(text = 'Đang tải dữ liệu timesheet...') {
+  const overlay = document.getElementById('timesheetLoadOverlay');
+  const textEl = document.getElementById('timesheetLoadText');
+  if (!overlay) return;
+  if (textEl) textEl.textContent = text;
+  overlay.classList.add('show');
+}
+
+function hideTimesheetLoadOverlay() {
+  document.getElementById('timesheetLoadOverlay')?.classList.remove('show');
+}
+
+function resetTimesheetFormForWeek() {
+  DAYS.forEach((day) => {
+    state.days[day.code] = {
+      enabled: false,
+      expanded: false,
+      tasks: [],
+    };
+  });
+}
+
+async function loadExistingTimesheetIntoForm() {
+  if (!isLoggedIn()) return;
+  const weekEnding = state.weekEnding || Core.getWeekEndingDate();
+  if (!weekEnding || lastLoadedWeekEnding === weekEnding) return;
+  lastLoadedWeekEnding = weekEnding;
+
+  showTimesheetLoadOverlay(`Đang tải timesheet ${weekEnding}...`);
+  let result;
+  try {
+    result = await chrome.runtime.sendMessage({
+      action: 'loadExistingTimesheet',
+      weekEnding,
+    });
+  } catch (e) {
+    console.warn('[Timesheet Detail] load failed', e);
+    return;
+  } finally {
+    hideTimesheetLoadOverlay();
+  }
+
+  if (!result?.success) {
+    if (result?.needLogin) showToast('Phiên đăng nhập hết hạn, hãy đăng nhập lại', 'error');
+    else if (result?.message) console.warn('[Timesheet Detail] load failed:', result.message);
+    return;
+  }
+
+  if (!result.found || !result.hasData) {
+    resetTimesheetFormForWeek();
+    await persistState();
+    renderDays();
+    showToast('Không có timesheet cho tuần này, đã reset form', 'info');
+    return;
+  }
+  applyExistingTimesheet(result.days || {});
+  await persistState();
+  renderDays();
+  showToast(`Đã load dữ liệu từ timesheet #${result.record?.id}`, 'success');
+}
+
+function applyExistingTimesheet(days) {
+  DAYS.forEach((day) => {
+    const tasks = Array.isArray(days[day.code]) ? days[day.code] : [];
+    state.days[day.code] = state.days[day.code] || { enabled: false, expanded: false, tasks: [] };
+    if (tasks.length > 0) {
+      state.days[day.code].enabled = true;
+      state.days[day.code].expanded = true;
+      state.days[day.code].tasks = tasks.map((task) => ({
+        project: task.project || '',
+        task: task.task || '',
+        workHours: task.workHours || '',
+        startTime: task.startTime || '',
+        breakTime: task.breakTime || '',
+        finishTime: task.finishTime || '',
+      }));
+      tasks.forEach((task) => {
+        if (task.project && !state.savedProjects.includes(task.project)) {
+          state.savedProjects.push(task.project);
+        }
+      });
+    } else {
+      state.days[day.code].enabled = false;
+      state.days[day.code].expanded = false;
+      state.days[day.code].tasks = [];
+    }
+  });
 }
 
 async function saveState(options = {}) {
@@ -568,14 +713,34 @@ function bindGlobalEvents() {
   document.getElementById('weekEndingInput')?.addEventListener('change', () => {
     syncWeekEndingInputs('text');
     collectFromDOM();
+    resetTimesheetFormForWeek();
+    lastLoadedWeekEnding = '';
     persistState();
+    renderDays();
+    scheduleLoadExistingTimesheet();
   });
   document
     .getElementById('weekEndingPicker')
-    ?.addEventListener('change', () => {
+    ?.addEventListener('change', (e) => {
+      const val = e.target.value; // YYYY-MM-DD
+      if (!val) return;
+      const d = new Date(val + 'T00:00:00');
+      // Snap to nearest Sunday (forward)
+      const dow = d.getDay(); // 0=Sun
+      if (dow !== 0) {
+        d.setDate(d.getDate() + (7 - dow));
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        e.target.value = `${yyyy}-${mm}-${dd}`;
+      }
       syncWeekEndingInputs('picker');
       collectFromDOM();
+      resetTimesheetFormForWeek();
+      lastLoadedWeekEnding = '';
       persistState();
+      renderDays();
+      scheduleLoadExistingTimesheet();
     });
 
   // Footer buttons
