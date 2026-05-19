@@ -1,68 +1,140 @@
-# Timesheet AutoFill — Chrome Extension
+# Timesheet AutoFill — Chrome & Firefox Extension
 
-Tự động điền timesheet hàng tuần của OpenWay với một cú click. Giao diện hiện đại, trực quan, hỗ trợ tùy biến linh hoạt.
+Tự động điền timesheet hàng tuần của OpenWay với một cú click. Hỗ trợ đăng nhập và submit trực tiếp từ extension mà không cần mở trang timesheet.
+
+---
 
 ## 🚀 Tính năng nổi bật
 
-- **Tự động hóa**: Điền đầy đủ Project, Task và Thời gian cho cả tuần chỉ với 1 click.
-- **Thông minh**: Tự động tính toán ngày **Week Ending** (Chủ nhật tuần trước nếu là Thứ 2, ngược lại là Chủ nhật tuần này).
-- **Preset**: Lưu cấu hình công việc lặp lại thành các Preset để tái sử dụng nhanh chóng.
-- **Đồng bộ hóa**: Tính năng **Apply All** giúp sao chép Project hoặc nội dung Task cho tất cả các ngày đang bật.
-- **Tìm kiếm Project**: Hỗ trợ tìm kiếm project trực tiếp từ trang timesheet và lưu vào danh sách nhanh.
-- **Theme**: Hỗ trợ Dark/Light mode và 7 màu chủ đạo theo nhận diện thương hiệu OpenWay.
-- **Dễ dàng quản lý**: Hỗ trợ Xuất/Nhập (Export/Import) cấu hình và Preset dưới dạng file JSON.
+- **Tự động hóa** — Điền đầy đủ Project, Task và Thời gian cho cả tuần chỉ với 1 click
+- **Submit headless** — Đăng nhập và lưu timesheet trực tiếp từ extension, không cần mở tab timesheet
+- **Kiểm tra session tự động** — Phát hiện phiên hết hạn ngay khi mở popup, nhắc đăng nhập lại trước khi submit
+- **Thông minh** — Tự động tính toán ngày **Week Ending** (Chủ nhật tuần trước nếu là Thứ 2, ngược lại là Chủ nhật tuần này)
+- **Multi-task** — Thêm nhiều task trong cùng một ngày, tự động chia giờ với nút **Auto time**
+- **Preset** — Lưu cấu hình công việc lặp lại để tái sử dụng nhanh chóng
+- **Apply All** — Sao chép Project hoặc nội dung Task cho tất cả các ngày đang bật
+- **Tìm kiếm Project** — Tìm và lưu project trực tiếp từ danh sách của hệ thống timesheet
+- **Theme** — Dark/Light mode và 7 màu chủ đạo theo nhận diện thương hiệu OpenWay
+- **Export/Import** — Xuất và nhập toàn bộ cấu hình và Preset dưới dạng JSON
+
+---
 
 ## 🛠 Cài đặt
 
-1. Clone project bằng git để có thể cập nhật sau này:
-   ```bash
-   git clone git@github.com:tuantoquq/internal-timesheet-ext.git
-   ```
-2. Mở trình duyệt Chrome và truy cập địa chỉ `chrome://extensions/`.
-3. Bật **Developer mode** (Chế độ cho nhà phát triển) ở góc trên bên phải.
-4. Nhấn nút **Load unpacked** (Tải tiện ích đã giải nén).
-5. Chọn thư mục chứa mã nguồn này.
+### Chrome (khuyến nghị)
+
+1. Tải file `.zip` từ trang [Releases](../../releases/latest) và giải nén
+2. Vào `chrome://extensions` → bật **Developer mode**
+3. Nhấn **Load unpacked** → chọn thư mục vừa giải nén
+
+### Cài từ source (để dùng `update.bat`)
+
+```bash
+git clone git@github.com:tuantoquq/internal-timesheet-ext.git
+```
+
+Sau đó load thư mục vừa clone vào Chrome theo hướng dẫn trên.
+
+---
 
 ## 📖 Hướng dẫn sử dụng
 
-1. Truy cập trang Timesheet nội bộ: `http://10.145.48.117:9099/...`.
-2. Mở Extension trên thanh công cụ của Chrome.
-3. **Cài đặt**: Thiết lập giờ giấc mặc định tại tab **Cài đặt**.
-4. **Điền task**: 
-   - Chọn các ngày cần điền.
-   - Chọn Project từ danh sách đã lưu (hoặc tìm kiếm tại tab **Presets**).
-   - Nhập nội dung công việc.
-5. Nhấn **Điền timesheet** để thực hiện việc autofill.
-6. Sử dụng nút **Xoá form** để dọn sạch dữ liệu cả trên extension và trên trang web khi cần làm lại.
+Extension hỗ trợ 2 chế độ hoạt động tùy theo version:
+
+---
+
+### Chế độ 1 — Fill trên trang (v1.0.3+)
+
+Phù hợp khi muốn kiểm tra lại dữ liệu trên trang trước khi submit thủ công.
+
+**Yêu cầu:**
+
+- Đã đăng nhập sẵn vào hệ thống timesheet trên browser
+- Đang mở đúng trang tạo timesheet mới (`TimeSheetEdit.aspx`)
+
+**Các bước:**
+
+1. Vào tab **Presets** → tìm kiếm và lưu các project thường dùng
+2. Vào tab **Cài đặt** → thiết lập URL timesheet và giờ mặc định
+3. Mở trang `TimeSheetEdit.aspx` trên browser
+4. Mở extension → tab **Điền task**
+5. Bật các ngày cần điền, chọn Project và nhập nội dung công việc
+6. Nhấn **Điền timesheet** — extension sẽ tự động fill dữ liệu vào form trên trang
+7. Kiểm tra lại nội dung trên trang rồi nhấn **Update** để lưu
+
+---
+
+### Chế độ 2 — Submit trực tiếp từ extension (v1.1.0+)
+
+Phù hợp khi muốn submit nhanh mà không cần mở trang timesheet.
+
+**Yêu cầu:**
+
+- Chưa cần đăng nhập trên browser — extension tự xử lý
+
+**Thiết lập lần đầu:**
+
+1. Mở extension → nhập URL timesheet, username và password → nhấn **Đăng nhập**
+2. Vào tab **Presets** → tìm kiếm và lưu các project thường dùng
+3. Vào tab **Cài đặt** → thiết lập giờ mặc định
+
+**Các bước sử dụng hàng tuần:**
+
+1. Mở extension → tab **Điền task**
+2. Bật các ngày cần điền, chọn Project và nhập nội dung công việc
+3. Nhấn **Submit timesheet** — dữ liệu được lưu thẳng lên server
+
+> **Lưu ý:** Extension tự kiểm tra session mỗi lần mở popup. Nếu phiên đăng nhập hết hạn (thường sau một đêm), extension sẽ cảnh báo và chuyển về màn hình đăng nhập tự động.
+
+---
+
+### Tính năng hỗ trợ chung (cả 2 chế độ)
+
+| Tính năng       | Mô tả                                                       |
+| --------------- | ----------------------------------------------------------- |
+| **+ Add task**  | Thêm nhiều task trong cùng một ngày                         |
+| **Auto time**   | Tự động chia đều giờ khi có nhiều task                      |
+| **Apply All**   | Áp dụng cùng project hoặc task cho tất cả các ngày đang bật |
+| **Lưu preset**  | Lưu cấu hình tuần hiện tại để tái sử dụng                   |
+| **Xoá form**    | Xoá toàn bộ dữ liệu trên extension và trên trang web        |
+| **Week Ending** | Tự động tính hoặc chọn thủ công ngày kết thúc tuần          |
+
+---
 
 ## 🔄 Cập nhật phiên bản
 
-Extension kiểm tra version mới nhất từ `CHANGELOG.md` trên GitHub public repo. Nếu có bản mới, tab **Cài đặt** sẽ hiển thị trạng thái **Update available**.
+Extension tự kiểm tra version mới nhất từ `CHANGELOG.md` trên GitHub. Nếu có bản mới, tab **Cài đặt** sẽ hiển thị trạng thái **Update available**.
 
-Trên Windows, chạy file:
+**Cập nhật tự động (Windows):**
 
 ```bat
 update.bat
 ```
 
-Sau khi update xong, mở `chrome://extensions/` và bấm **Reload** trên card Timesheet AutoFill.
+Sau khi chạy xong, vào `chrome://extensions` hoặc `about:addons` và nhấn **Reload**.
 
-Khi release version mới, cập nhật `manifest.json` và thêm heading mới vào `CHANGELOG.md` theo dạng:
+**Cập nhật thủ công:** Tải file `.xpi` hoặc `.zip` mới nhất từ [Releases](../../releases/latest) và cài đè lên bản cũ.
 
-```md
-## [1.0.1] - 2026-05-15
-```
+---
 
 ## 📂 Cấu trúc dự án
 
-- `popup.html/js`: Giao diện và logic chính của extension.
-- `content.js`: Script chạy trực tiếp trên trang timesheet để thực hiện điền dữ liệu.
-- `popup-core.js`: Thư viện logic dùng chung (xử lý thời gian, tìm kiếm project).
-- `AGENTS.md`: Hướng dẫn chi tiết dành cho nhà phát triển.
+| File              | Mô tả                                                             |
+| ----------------- | ----------------------------------------------------------------- |
+| `popup.html/js`   | Giao diện và logic chính của extension                            |
+| `popup-core.js`   | Thư viện dùng chung (xử lý thời gian, tìm kiếm project)           |
+| `content.js`      | Script chạy trên trang timesheet, thực hiện fill dữ liệu vào form |
+| `background.js`   | Service worker xử lý login và submit headless                     |
+| `options.html/js` | Trang hướng dẫn sử dụng (mở từ nút ? trong extension)             |
+| `CHANGELOG.md`    | Lịch sử phiên bản — dùng để kiểm tra update tự động               |
+| `AGENTS.md`       | Hướng dẫn chi tiết dành cho developer                             |
+
+---
 
 ## 📄 Bản quyền
 
 Dự án được phát hành dưới [MIT License](LICENSE).
 
 ---
-*Built with ❤️ for OpenWay by @tuannha*
+
+_Built with ❤️ for OpenWay by @tuannha_
