@@ -728,6 +728,24 @@
         color: #fecaca;
         background: var(--red-bg);
       }
+
+      .btn-secondary:disabled,
+      .btn-danger-soft:disabled,
+      .btn-save-preset:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        color: var(--text-3);
+        border-color: var(--border);
+        background: rgba(148, 163, 184, 0.08);
+      }
+      .btn-secondary:disabled:hover,
+      .btn-danger-soft:disabled:hover,
+      .btn-save-preset:disabled:hover {
+        color: var(--text-3);
+        border-color: var(--border);
+        background: rgba(148, 163, 184, 0.08);
+      }
+
       .btn-save-preset {
         flex: 0 0 auto;
         padding: 8px 12px;
@@ -1192,6 +1210,28 @@
       .screen-hidden {
         display: none !important;
       }
+
+      .day-card.approved {
+        border-color: rgba(52, 211, 153, 0.35);
+        background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(15, 23, 42, 0.92));
+      }
+      .day-badge.approved {
+        background: rgba(52, 211, 153, 0.18);
+        border-color: rgba(52, 211, 153, 0.35);
+        color: #86efac;
+      }
+      .task-row.approved {
+        opacity: 0.78;
+      }
+      .task-row.approved input,
+      .task-row.approved textarea,
+      .task-row.approved select,
+      .task-row.approved button,
+      .btn-add-task:disabled,
+      .btn-auto-time:disabled {
+        cursor: not-allowed;
+      }
+
       .login-error {
         min-height: 16px;
         margin-top: 8px;
@@ -1758,7 +1798,7 @@
 
       <div class="product-footer">
         Timesheet AutoFill <span id="footerVersion">v-</span> &middot; Built
-        with <span>&hearts;</span> for OpenWay by <span>@tuannha</span>
+        with <span>&hearts;</span> for OpenWay by <a href="https://github.com/tuantoquq" target="_blank" rel="noopener noreferrer">@tuannha</a>
       </div>
     </div>
     <div class="login-panel" id="submitSuccessPanel">

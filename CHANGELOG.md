@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.2] - 2026-05-19
+
+### Added
+
+- Hiển thị trạng thái `Approved` / `New` từ timesheet detail trên từng ngày trong form extension.
+- Khóa chỉnh sửa các ngày đã `Approved` và vô hiệu hoá submit/xoá form khi toàn bộ ngày có dữ liệu đều đã approved.
+- Footer author `@tuannha` trỏ tới GitHub profile.
+
+### Fixed
+
+- Parse status trong detail page ổn định hơn cho các dòng HTML bị thiếu closing tag, đặc biệt Tuesday.
+- Hoàn thiện headless multi-task submit bằng cách tạo đủ server rows trước khi update timesheet.
+- Đồng bộ payload multi-task với format thực tế của hệ thống timesheet.
+- Style disabled cho nút Xoá form để phản ánh đúng trạng thái bị khóa.
+
+---
+
 ## [1.1.1] - 2026-05-19
 
 ### Added

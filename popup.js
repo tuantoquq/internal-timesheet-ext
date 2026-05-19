@@ -207,6 +207,8 @@ function normalizeState(nextState) {
     if (!nextState.days[d.code]) {
       nextState.days[d.code] = { enabled: false, expanded: false, tasks: [] };
     }
+    nextState.days[d.code].approved = nextState.days[d.code].approved === true;
+    nextState.days[d.code].status = nextState.days[d.code].status || '';
     if (!Array.isArray(nextState.days[d.code].tasks)) {
       nextState.days[d.code].tasks = [];
     }
@@ -312,6 +314,8 @@ function resetTimesheetFormForWeek() {
       enabled: false,
       expanded: false,
       tasks: [],
+      approved: false,
+      status: '',
     };
   });
 }
@@ -360,8 +364,11 @@ function applyExistingTimesheet(days) {
     const tasks = Array.isArray(days[day.code]) ? days[day.code] : [];
     state.days[day.code] = state.days[day.code] || { enabled: false, expanded: false, tasks: [] };
     if (tasks.length > 0) {
+      const approved = tasks.every((task) => isApprovedStatus(task.status));
       state.days[day.code].enabled = true;
       state.days[day.code].expanded = true;
+      state.days[day.code].approved = approved;
+      state.days[day.code].status = approved ? 'Approved' : tasks.map((task) => task.status).filter(Boolean).join(', ');
       state.days[day.code].tasks = tasks.map((task) => ({
         project: task.project || '',
         task: task.task || '',
@@ -369,6 +376,7 @@ function applyExistingTimesheet(days) {
         startTime: task.startTime || '',
         breakTime: task.breakTime || '',
         finishTime: task.finishTime || '',
+        status: task.status || '',
       }));
       tasks.forEach((task) => {
         if (task.project && !state.savedProjects.includes(task.project)) {
@@ -378,8 +386,35 @@ function applyExistingTimesheet(days) {
     } else {
       state.days[day.code].enabled = false;
       state.days[day.code].expanded = false;
+      state.days[day.code].approved = false;
+      state.days[day.code].status = '';
       state.days[day.code].tasks = [];
     }
+  });
+}
+
+function isApprovedStatus(status) {
+  return String(status || '').trim().toLowerCase() === 'approved';
+}
+
+function areAllDataDaysApproved() {
+  const dataDays = DAYS.filter((day) => state.days[day.code]?.tasks?.length > 0);
+  return dataDays.length > 0 && dataDays.every((day) => state.days[day.code]?.approved === true);
+}
+
+function updateSubmitLockState() {
+  const locked = areAllDataDaysApproved();
+  const submitBtn = document.getElementById('btnHeadlessSubmit');
+  const clearBtn = document.getElementById('btnClear');
+  const clearAllBtn = document.getElementById('btnClearAll');
+  if (submitBtn) {
+    submitBtn.disabled = locked;
+    submitBtn.title = locked ? 'Timesheet đã Approved toàn bộ, không thể submit' : '';
+  }
+  [clearBtn, clearAllBtn].forEach((btn) => {
+    if (!btn) return;
+    btn.disabled = locked;
+    btn.title = locked ? 'Timesheet đã Approved toàn bộ, không thể xoá form' : '';
   });
 }
 
@@ -460,6 +495,7 @@ function renderDays() {
     const card = buildDayCard(d, dayState);
     container.appendChild(card);
   });
+  updateSubmitLockState();
 }
 
 function buildDayCard(day, dayState) {
@@ -468,27 +504,32 @@ function buildDayCard(day, dayState) {
   const expanded = dayState.expanded && enabled;
   const taskCount = (dayState.tasks || []).length;
   const showWorkHours = taskCount > 1;
+  const approved = dayState.approved === true;
+  const lockedWeek = areAllDataDaysApproved();
+  const lockedDay = approved || lockedWeek;
+  const statusLabel = dayState.status || (approved ? 'Approved' : '');
 
   const card = document.createElement('div');
-  card.className = `day-card${enabled ? ' has-tasks' : ''}${!enabled ? ' disabled' : ''}`;
+  card.className = `day-card${enabled ? ' has-tasks' : ''}${!enabled ? ' disabled' : ''}${approved ? ' approved' : ''}${lockedDay ? ' locked' : ''}`;
   card.id = `day-card-${code}`;
 
   card.innerHTML = `
     <div class="day-header" id="day-header-${code}">
-      <div class="day-toggle${enabled ? ' on' : ''}" id="toggle-${code}" title="Bật/tắt ngày này">
+      <div class="day-toggle${enabled ? ' on' : ''}${lockedDay ? ' locked' : ''}" id="toggle-${code}" title="${lockedDay ? 'Timesheet đã Approved, không thể bật/tắt ngày' : 'Bật/tắt ngày này'}">
         <div class="day-toggle-thumb"></div>
       </div>
       <span class="day-name">${label} <span style="color:var(--text-3);font-weight:400;font-size:11px;">${short}</span></span>
       ${enabled ? `<span class="day-badge active">${taskCount} task${taskCount !== 1 ? 's' : ''}</span>` : `<span class="day-badge">off</span>`}
+      ${statusLabel ? `<span class="day-badge${approved ? ' approved' : ''}">${escHtml(statusLabel)}</span>` : ''}
       <span class="day-chevron${expanded ? ' open' : ''}">⌄</span>
     </div>
     <div class="day-body${expanded ? ' open' : ''}" id="body-${code}">
       <div class="tasks-container" id="tasks-${code}">
-        ${(dayState.tasks || []).map((t, i) => buildTaskRow(code, i, t, showWorkHours)).join('')}
+        ${(dayState.tasks || []).map((t, i) => buildTaskRow(code, i, t, showWorkHours, approved)).join('')}
       </div>
       <div class="task-actions-row">
-        <button class="btn-add-task" data-day="${code}" type="button">+ Add task</button>
-        ${showWorkHours ? `<button class="btn-auto-time" data-day="${code}" type="button">Auto time</button>` : ''}
+        <button class="btn-add-task" data-day="${code}" type="button"${lockedDay ? ' disabled' : ''}>+ Add task</button>
+        ${showWorkHours ? `<button class="btn-auto-time" data-day="${code}" type="button"${lockedDay ? ' disabled' : ''}>Auto time</button>` : ''}
       </div>
     </div>
   `;
@@ -497,6 +538,7 @@ function buildDayCard(day, dayState) {
   // Toggle enable/disable
   card.querySelector(`#toggle-${code}`).addEventListener('click', (e) => {
     e.stopPropagation();
+    if (lockedDay) return;
     toggleDay(code);
   });
 
@@ -508,26 +550,28 @@ function buildDayCard(day, dayState) {
 
   card.querySelector('.btn-add-task')?.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (lockedDay) return;
     addTask(code);
   });
 
   return card;
 }
 
-function buildTaskRow(dayCode, index, taskData = {}, showWorkHours = false) {
+function buildTaskRow(dayCode, index, taskData = {}, showWorkHours = false, disabled = false) {
   const projectOptions = Core.collectProjectOptions(
     state.savedProjects,
     taskData.project,
   );
+  const disabledAttr = disabled ? ' disabled' : '';
   return `
-    <div class="task-row" id="task-row-${dayCode}-${index}">
+    <div class="task-row${disabled ? ' approved' : ''}" id="task-row-${dayCode}-${index}">
       <div class="task-row-header">
         <span class="task-index">Task #${index + 1}</span>
-        ${index > 0 ? `<button class="btn-remove-task" data-day="${dayCode}" data-index="${index}" title="Xoá task này">✕</button>` : ''}
+        ${index > 0 && !disabled ? `<button class="btn-remove-task" data-day="${dayCode}" data-index="${index}" title="Xoá task này">✕</button>` : ''}
       </div>
       <div class="task-fields">
         <div class="project-select-row">
-          <select class="text-input project-select" data-field="project">
+          <select class="text-input project-select" data-field="project"${disabledAttr}>
             <option value="">Không điền project</option>
             ${projectOptions
               .map(
@@ -537,14 +581,14 @@ function buildTaskRow(dayCode, index, taskData = {}, showWorkHours = false) {
               )
               .join('')}
           </select>
-          <button class="btn-apply-all btn-apply-project" data-day="${dayCode}" data-index="${index}" title="Apply project này cho các ngày đang bật">
+          <button class="btn-apply-all btn-apply-project"${disabledAttr} data-day="${dayCode}" data-index="${index}" title="Apply project này cho các ngày đang bật">
             <span aria-hidden="true">⇉</span><span class="apply-all-text">Apply All</span>
           </button>
         </div>
         <div class="task-apply-row">
-          <textarea class="text-input" data-field="task"
+          <textarea class="text-input" data-field="task"${disabledAttr}
             placeholder="Mô tả công việc...">${escHtml(taskData.task || '')}</textarea>
-          <button class="btn-apply-all btn-apply-task" data-day="${dayCode}" data-index="${index}" title="Apply nội dung task này cho các ngày đang bật">
+          <button class="btn-apply-all btn-apply-task"${disabledAttr} data-day="${dayCode}" data-index="${index}" title="Apply nội dung task này cho các ngày đang bật">
             <span aria-hidden="true">⇉</span><span class="apply-all-text">Apply All</span>
           </button>
         </div>
@@ -555,7 +599,7 @@ function buildTaskRow(dayCode, index, taskData = {}, showWorkHours = false) {
             <span class="work-hours-label">Hours</span>
             <input type="number" class="time-input" data-field="workHours"
               min="0.25" step="0.25" placeholder="vd: 2.5"
-              value="${escHtml(taskData.workHours || '')}" style="font-size:12px;padding:5px 7px;" />
+              value="${escHtml(taskData.workHours || '')}" style="font-size:12px;padding:5px 7px;"${disabledAttr} />
           </div>
         `
             : ''
@@ -564,19 +608,19 @@ function buildTaskRow(dayCode, index, taskData = {}, showWorkHours = false) {
           <div class="time-field-mini">
             <span class="time-label-mini">Start</span>
             <input type="text" class="time-input" data-field="startTime"
-              placeholder="default" value="${escHtml(taskData.startTime || '')}" style="font-size:12px;padding:5px 7px;" />
+              placeholder="default" value="${escHtml(taskData.startTime || '')}" style="font-size:12px;padding:5px 7px;"${disabledAttr} />
             <span class="time-hint green">↳ ${state.defaultStart}</span>
           </div>
           <div class="time-field-mini">
             <span class="time-label-mini">Break</span>
             <input type="text" class="time-input" data-field="breakTime"
-              placeholder="default" value="${escHtml(taskData.breakTime || '')}" style="font-size:12px;padding:5px 7px;" />
+              placeholder="default" value="${escHtml(taskData.breakTime || '')}" style="font-size:12px;padding:5px 7px;"${disabledAttr} />
             <span class="time-hint green">↳ ${state.defaultBreak}</span>
           </div>
           <div class="time-field-mini">
             <span class="time-label-mini">Finish</span>
             <input type="text" class="time-input" data-field="finishTime"
-              placeholder="default" value="${escHtml(taskData.finishTime || '')}" style="font-size:12px;padding:5px 7px;" />
+              placeholder="default" value="${escHtml(taskData.finishTime || '')}" style="font-size:12px;padding:5px 7px;"${disabledAttr} />
             <span class="time-hint green">↳ ${state.defaultFinish}</span>
           </div>
         </div>
@@ -595,6 +639,11 @@ function escHtml(str) {
 
 // ── Day actions ───────────────────────────────────────
 function toggleDay(code) {
+  if (areAllDataDaysApproved() || state.days[code]?.approved === true) {
+    showToast('Timesheet đã Approved, không thể bật/tắt ngày', 'info');
+    updateSubmitLockState();
+    return;
+  }
   collectFromDOM();
   const d = state.days[code];
   d.enabled = !d.enabled;
@@ -1014,6 +1063,11 @@ async function runFill() {
 
 // ── Clear form ────────────────────────────────────────
 async function clearForm() {
+  if (areAllDataDaysApproved()) {
+    showToast('Timesheet đã Approved toàn bộ, không thể xoá form', 'info');
+    updateSubmitLockState();
+    return;
+  }
   collectFromDOM();
   Core.clearTasks(state, DAYS);
   await persistState();
@@ -1329,6 +1383,11 @@ async function importConfig(e) {
 }
 
 async function clearAllData() {
+  if (areAllDataDaysApproved()) {
+    showToast('Timesheet đã Approved toàn bộ, không thể xoá dữ liệu', 'info');
+    updateSubmitLockState();
+    return;
+  }
   if (!confirm('Xoá toàn bộ dữ liệu và preset?')) return;
   await new Promise((r) => chrome.storage.local.clear(r));
   state = createDefaultState();
@@ -1354,6 +1413,11 @@ function showToast(msg, type = 'info') {
 
 // ── Headless submit (không cần mở tab) ────────────────────────────
 async function runHeadlessSubmit() {
+  if (areAllDataDaysApproved()) {
+    showToast('Timesheet đã Approved toàn bộ, không thể submit', 'info');
+    updateSubmitLockState();
+    return;
+  }
   collectFromDOM();
   await saveState();
 

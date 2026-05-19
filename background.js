@@ -629,10 +629,19 @@ function parseTimesheetDetailTasks(html) {
         breakTime: normalizeDetailTime(cells[3]),
         finishTime: normalizeDetailTime(cells[4]),
         workHours: '',
+        status: extractDetailRowStatus(cells),
       });
     }
   }
   return result;
+}
+
+function extractDetailRowStatus(cells) {
+  for (let i = cells.length - 1; i >= 0; i--) {
+    const value = String(cells[i] || '').trim();
+    if (/^(new|approved)$/i.test(value)) return value;
+  }
+  return '';
 }
 
 function extractTableCells(row) {
@@ -875,14 +884,37 @@ async function addTimesheetRow(dayCode, options = {}) {
   });
 
   const text = await res.text();
-  try {
-    // Server returns JSON-like: {success:true, newDayCount:1, ...}
-    // Use eval-safe parse
-    const result = JSON.parse(text.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":'));
-    return result;
-  } catch (e) {
-    return { success: false, message: text.slice(0, 100) };
-  }
+  return parseAddTimesheetRowResult(text);
+}
+
+function htmlDecode(value) {
+  return String(value || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
+function parseAddTimesheetRowResult(text) {
+  const raw = String(text || '');
+  const success = /success\s*:\s*true/i.test(raw) || /["']success["']\s*:\s*true/i.test(raw);
+  if (!success) return { success: false, message: raw.slice(0, 200) };
+  return {
+    success: true,
+    dayCode: extractJsObjectValue(raw, 'dayCode') || '',
+    newDayCount: Number(extractJsObjectValue(raw, 'newDayCount') || 0),
+    inputName: extractJsObjectValue(raw, 'inputName') || '',
+    projectInput: extractJsObjectValue(raw, 'projectInput') || '',
+  };
+}
+
+function extractJsObjectValue(raw, key) {
+  const quoted = new RegExp(`${key}\s*:\s*['"]([\s\S]*?)['"]\s*(?:,|})`, 'i').exec(raw);
+  if (quoted) return htmlDecode(quoted[1]);
+  const bare = new RegExp(`${key}\s*:\s*([^,}]+)`, 'i').exec(raw);
+  return bare ? htmlDecode(bare[1].trim()) : '';
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
